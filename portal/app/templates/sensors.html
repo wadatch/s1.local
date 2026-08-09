@@ -108,8 +108,8 @@
             電池切れか圏外の可能性
           </td>
           {% else %}
-          <td class="num strong cell-temperature" data-label="温度">{{ format_value(sensor.temperature, 'celsius') }}</td>
-          <td class="num cell-humidity" data-label="湿度">{{ format_value(sensor.humidity, 'percent100') }}</td>
+          <td class="num strong cell-temperature temp-{{ sensor.temperature_level }}" data-label="温度">{{ format_value(sensor.temperature, 'celsius') }}</td>
+          <td class="num cell-humidity hum-{{ sensor.humidity_level }}" data-label="湿度">{{ format_value(sensor.humidity, 'percent100') }}</td>
           <td class="num cell-battery level-{{ sensor.battery_level }}" data-label="電池">
             <span class="battery-icon" data-battery="{{ sensor.battery_icon }}"
                   title="{{ sensor.battery_text }}"></span>
@@ -157,6 +157,22 @@
 <p class="note">
   この表は 30 秒ごとに自動で更新される。
   すぐ見たいときは「更新」ボタン、スマホでは画面を下に引っ張っても更新できる。
+</p>
+
+<p class="note colour-key">
+  色の意味：
+  <span class="key temp-cold">寒い</span>
+  <span class="key temp-comfort">快適 18〜26℃</span>
+  <span class="key temp-hot">暑い</span>
+  ／
+  <span class="key hum-dry">乾燥</span>
+  <span class="key hum-comfort">快適 40〜60%</span>
+  <span class="key hum-humid">多湿</span>
+  ／
+  電池は
+  <span class="key bat-ok">十分</span>
+  <span class="key bat-warn">少ない</span>
+  <span class="key bat-crit">要交換</span>
 </p>
 
 <p class="note">

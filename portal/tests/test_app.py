@@ -327,6 +327,10 @@ def test_センサー一覧の行に自動更新用の目印が付く(make_app, 
     # 電池はアイコンで出すが、値そのものも読み上げと吹き出しに残す
     assert 'class="battery-icon" data-battery=' in body
     assert '電池 92%' in body
+    # 温度・湿度・電池はそれぞれ色が付く
+    assert 'cell-temperature temp-comfort' in body, "24.5℃ は快適の色"
+    assert 'cell-humidity hum-' in body
+    assert 'cell-battery level-ok' in body, "92% は十分の色"
 
 
 def test_グラフページが自動更新のスクリプトを読む(make_app):

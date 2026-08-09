@@ -24,8 +24,27 @@ function formatDuration(seconds) {
   return `${minutes} 分`;
 }
 
-// サーバ側の Sensor.battery_level / battery_icon / battery_text と
-// そろえておく。ずれると更新の前後で見た目が変わる。
+// ここから下の段階分けは、サーバ側の Sensor の同名プロパティと
+// そろえておく。ずれると更新の前後で色が変わってしまう。
+
+function temperatureLevel(t) {
+  if (t === null || t === undefined) return "unknown";
+  if (t <= 10) return "cold";
+  if (t <= 18) return "cool";
+  if (t <= 26) return "comfort";
+  if (t <= 30) return "warm";
+  return "hot";
+}
+
+function humidityLevel(h) {
+  if (h === null || h === undefined) return "unknown";
+  if (h <= 30) return "dry";
+  if (h <= 40) return "dryish";
+  if (h <= 60) return "comfort";
+  if (h <= 70) return "humidish";
+  return "humid";
+}
+
 function batteryLevel(battery) {
   if (battery === null || battery === undefined) return "none";
   if (battery <= 10) return "crit";
@@ -131,10 +150,21 @@ async function refresh() {
     const row = rows.get(sensor.device_id);
     if (stateOf(sensor) !== "active") continue;
 
-    setCell(row, "cell-temperature",
-      sensor.temperature === null ? "—" : `${sensor.temperature.toFixed(1)} °C`);
-    setCell(row, "cell-humidity",
-      sensor.humidity === null ? "—" : `${Math.round(sensor.humidity)} %`);
+    const temp = row.querySelector(".cell-temperature");
+    if (temp) {
+      temp.textContent =
+        sensor.temperature === null ? "—" : `${sensor.temperature.toFixed(1)} °C`;
+      temp.className =
+        `num strong cell-temperature temp-${temperatureLevel(sensor.temperature)}`;
+    }
+
+    const hum = row.querySelector(".cell-humidity");
+    if (hum) {
+      hum.textContent =
+        sensor.humidity === null ? "—" : `${Math.round(sensor.humidity)} %`;
+      hum.className = `num cell-humidity hum-${humidityLevel(sensor.humidity)}`;
+    }
+
     setBattery(row, sensor.battery);
     setCell(row, "cell-age",
       `${formatDuration(sensor.age_seconds)}前`,
