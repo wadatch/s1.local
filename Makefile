@@ -2,7 +2,7 @@ SHELL := /bin/bash
 DEPLOY_HOST ?= s1.local
 DEPLOY_PATH ?= ~/s1.local
 
-.PHONY: help up down restart logs ps check test deploy
+.PHONY: help up down restart logs ps check test deploy switchbot-devices
 
 help:
 	@echo "up      - 起動（ビルド込み）"
@@ -13,6 +13,7 @@ help:
 	@echo "check   - 設定ファイルの構文チェック"
 	@echo "test    - ポータルのテスト（Docker 上で実行。ローカルに Python 不要）"
 	@echo "deploy  - $(DEPLOY_HOST):$(DEPLOY_PATH) へ配備して起動"
+	@echo "switchbot-devices - SwitchBot の登録デバイスと現在値を一覧表示"
 
 up:
 	docker compose up -d --build
@@ -39,6 +40,13 @@ check:
 
 test:
 	docker build -t s1-portal/portal:test --target test ./portal
+	docker build -t s1-portal/switchbot-exporter:test --target test ./switchbot-exporter
+
+# services.yml に書くデバイス名を調べるためのもの。
+# 認証情報は s1 の .env にあるので、s1 側で実行する。
+switchbot-devices:
+	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_PATH) && docker compose run --rm --no-deps \
+		switchbot-exporter python exporter.py --list-devices'
 
 deploy:
 	rsync -av --delete \

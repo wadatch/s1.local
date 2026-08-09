@@ -26,6 +26,11 @@ function updateCard(card, service) {
     statusText.textContent = STATUS_LABEL[service.health.status] || service.health.status;
   }
 
+  if (service.matrix) {
+    updateMatrix(card, service.matrix);
+    return;
+  }
+
   // メトリクスの並びはサーバ側の描画と同じ順序。
   const nodes = card.querySelectorAll(".metric");
   service.metrics.forEach((metric, i) => {
@@ -39,6 +44,41 @@ function updateCard(card, service) {
     }
     const dd = node.querySelector("dd");
     if (dd) dd.textContent = metric.display;
+  });
+}
+
+function updateMatrix(card, matrix) {
+  const extras = card.querySelectorAll(".metrics-extra .metric");
+  (matrix.extras || []).forEach((metric, i) => {
+    const node = extras[i];
+    if (!node) return;
+    node.className = `metric level-${metric.level}`;
+    const dd = node.querySelector("dd");
+    if (dd) dd.textContent = metric.display;
+  });
+
+  const rows = card.querySelectorAll("table.matrix tbody tr");
+  matrix.rows.forEach((row, rowIndex) => {
+    const tr = rows[rowIndex];
+    if (!tr) return;
+    // 1 列目は行見出しなので、値のセルは 2 番目から
+    const cells = tr.querySelectorAll("td");
+    row.cells.forEach((cell, columnIndex) => {
+      const td = cells[columnIndex];
+      if (!td) return;
+      if (!cell) {
+        td.className = "level-unknown";
+        td.textContent = "—";
+        return;
+      }
+      td.className = `level-${cell.level}`;
+      td.textContent = cell.display;
+      if (cell.detail) {
+        td.title = cell.detail;
+      } else {
+        td.removeAttribute("title");
+      }
+    });
   });
 }
 

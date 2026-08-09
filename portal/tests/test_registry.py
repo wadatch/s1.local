@@ -76,6 +76,100 @@ def test_node_exporter_のフィールドを読める():
     assert registry.services[0].metrics[0].field_name == "cpu_usage_ratio"
 
 
+def test_prometheus_text_のラベルを読める():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            metrics:
+              - label: リビング 温度
+                source: prometheus_text
+                endpoint: http://switchbot-exporter:9110
+                metric: switchbot_temperature_celsius
+                labels: {device_name: リビング}
+                format: celsius
+        """
+    )
+    metric = registry.services[0].metrics[0]
+    assert metric.metric_name == "switchbot_temperature_celsius"
+    assert metric.labels == {"device_name": "リビング"}
+
+
+def test_prometheus_text_に_metric_が無いとエラー():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            metrics:
+              - label: 温度
+                source: prometheus_text
+                endpoint: http://sb:9110
+        """
+    )
+    assert any("metric が必要" in e for e in registry.services[0].errors)
+
+
+def test_行列レイアウトを読める():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            layout: matrix
+            matrix:
+              columns: [屋外, 屋内]
+              rows: [南棟, 北棟, 苗場]
+            metrics:
+              - label: 南棟 屋外
+                row: 南棟
+                column: 屋外
+                source: none
+        """
+    )
+    service = registry.services[0]
+    assert service.layout == "matrix"
+    assert service.matrix_columns == ["屋外", "屋内"]
+    assert service.matrix_rows == ["南棟", "北棟", "苗場"]
+    assert service.metrics[0].row == "南棟"
+    assert service.metrics[0].column == "屋外"
+    assert service.errors == []
+
+
+def test_既定は一覧レイアウト():
+    registry = parse_yaml("services:\n  - id: foo\n    name: フー\n")
+    assert registry.services[0].layout == "list"
+
+
+def test_行列に軸が無ければ一覧に落とす():
+    """軸なしで表を描こうとして落ちるより、一覧で出したほうがまし。"""
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            layout: matrix
+        """
+    )
+    service = registry.services[0]
+    assert service.layout == "list"
+    assert any("matrix.rows" in e for e in service.errors)
+
+
+def test_不正なレイアウト名はエラーにして一覧に落とす():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            layout: 立体
+        """
+    )
+    assert registry.services[0].layout == "list"
+    assert any("layout" in e for e in registry.services[0].errors)
+
+
 def test_カテゴリの既定値を上書きできる():
     registry = parse_yaml(
         """

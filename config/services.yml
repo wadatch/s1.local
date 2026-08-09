@@ -9,11 +9,111 @@
 # ===========================================================================
 
 categories:
+  home: 家の状態
   monitoring: 監視
   infra: サーバ基盤
   tools: 自作ツール
 
 services:
+  # -------------------------------------------------------------------------
+  # 温湿度センサーは 32 台ある。全部をここに並べるとトップページの
+  # 一覧性が失われるので、代表的な数点だけを出して /sensors へ誘導する。
+  # 代表を入れ替えたいときは device_name を書き換えるだけでよい。
+  - id: switchbot
+    name: 温湿度センサー
+    description: 南棟・北棟・苗場の温湿度。代表を 1 点ずつ出している。全台の一覧とグラフは開いて確認する。
+    url: /sensors
+    category: home
+    health:
+      type: http
+      url: http://portal-switchbot-exporter:9110/metrics
+    # 値を行×列の表に並べる。縦が棟、横が屋外/屋内。
+    # 屋内はそれぞれのリビング。
+    layout: matrix
+    matrix:
+      columns: [屋外, 屋内（リビング）]
+      rows: [南棟, 北棟, 苗場]
+
+    metrics:
+      # row と column でどのマスに置くかを決める。
+      # ここに書く device_name は config/switchbot.yml の devices に
+      # 載っているもの（＝取得中のもの）に限る。止めたセンサーを指すと
+      # 値が「—」のままになる。
+      - label: 南棟 屋外
+        row: 南棟
+        column: 屋外
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 外の温度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
+      - label: 南棟 リビング
+        row: 南棟
+        column: 屋内（リビング）
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: リビング温湿度管理}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 北棟 屋外
+        row: 北棟
+        column: 屋外
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 北棟屋外温度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
+      - label: 北棟 リビング
+        row: 北棟
+        column: 屋内（リビング）
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 北棟リビング}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 苗場 屋外
+        row: 苗場
+        column: 屋外
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: バルコニーの温湿度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
+      - label: 苗場 リビング
+        row: 苗場
+        column: 屋内（リビング）
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: リビングの温度計}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 取得できているセンサー
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_sensor_count
+        format: count
+
+      # 電池切れや圏外で値を返さなくなったセンサーの数。
+      # config/switchbot.yml で除外したものはここに含まれない。
+      - label: 値なしセンサー
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_offline_device_count
+        format: count
+        thresholds: {warn: 1, crit: 3}
+
   # -------------------------------------------------------------------------
   - id: network-analyzer
     name: ネットワーク監視

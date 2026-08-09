@@ -32,11 +32,20 @@ services:
     container_name: portal-app
     restart: unless-stopped
     volumes:
-      # 設定を read-only でマウントする。サービスを追加するとき
-      # コンテナを再起動せずに反映させるため（registry.py が mtime を見る）。
-      - ./config:/app/config:ro
+      # 書き込み可でマウントする。/sensors 画面のトグルが
+      # config/switchbot.yml を書き換えるため。
+      # サービスの追加も、コンテナを再起動せずに反映される
+      # （registry.py が mtime を見る）。
+      - ./config:/app/config
+      # 温湿度の履歴（SQLite）。書き手はポータルだけ。
+      - portal-data:/data
     environment:
       SERVICES_FILE: /app/config/services.yml
+      SWITCHBOT_CONFIG: /app/config/switchbot.yml
+      SWITCHBOT_EXPORTER_URL: http://portal-switchbot-exporter:9110
+      HISTORY_DB: /data/history.db
+      HISTORY_INTERVAL_SECONDS: ${HISTORY_INTERVAL_SECONDS:-120}
+      HISTORY_KEEP_DAYS: ${HISTORY_KEEP_DAYS:-90}
       STATUS_CACHE_SECONDS: ${STATUS_CACHE_SECONDS:-10}
       HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
     networks:
@@ -52,6 +61,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  switchbot-exporter:
+    build: ./switchbot-exporter
+    image: s1-portal/switchbot-exporter:local
+    container_name: portal-switchbot-exporter
+    restart: unless-stopped
+    volumes:
+      # 除外リスト。毎周期で読み直すので、編集しても再起動は要らない。
+      - ./config:/app/config:ro
+    environment:
+      SWITCHBOT_TOKEN: ${SWITCHBOT_TOKEN:-}
+      SWITCHBOT_SECRET: ${SWITCHBOT_SECRET:-}
+      # SwitchBot API は 1 日 10,000 回まで。この間隔がそのまま消費量を決める。
+      # 消費回数 ≒ (センサー台数 + 1) × 86400 / この値。詳細は .env.example。
+      SWITCHBOT_POLL_SECONDS: ${SWITCHBOT_POLL_SECONDS:-600}
+    expose:
+      - "9110"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9110/metrics', timeout=3).status == 200 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
@@ -70,6 +103,7 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  portal-data:
 
 networks:
   # 既定のネットワーク。portal / caddy / node-exporter はここで互いに解決できる。

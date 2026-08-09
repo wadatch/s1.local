@@ -25,6 +25,9 @@ class MetricResult:
     format: str
     thresholds: dict[str, float]
     detail: str = ""
+    # layout=matrix のカードで、この値をどのマスに置くか。設定から素通しする。
+    row: str = ""
+    column: str = ""
 
     @property
     def level(self) -> str:
@@ -153,6 +156,47 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
     return fields
 
 
+# --------------------------------------------------------------------------
+# 任意の /metrics（Prometheus テキスト形式）
+# --------------------------------------------------------------------------
+
+def _select_sample(text: str, metric: str, labels: dict[str, str]) -> float | None:
+    """metric 名と、指定したラベルをすべて含む系列を 1 つ選んで値を返す。
+
+    ラベルは部分一致でよい（指定したものが全て一致すればよく、
+    系列が余分なラベルを持っていても構わない）。センサーを増やしても
+    services.yml 側で device_name だけ書けば済むようにするため。
+    """
+    for family in text_string_to_metric_families(text):
+        for sample in family.samples:
+            if sample.name != metric:
+                continue
+            if all(sample.labels.get(k) == v for k, v in labels.items()):
+                return sample.value
+    return None
+
+
+async def _query_prometheus_text(
+    client: httpx.AsyncClient, endpoint: str, metric: str, labels: dict[str, str]
+) -> tuple[float | None, str]:
+    try:
+        response = await client.get(f"{endpoint.rstrip('/')}/metrics")
+    except httpx.HTTPError as exc:
+        return None, f"取得失敗: {type(exc).__name__}"
+
+    if response.status_code != 200:
+        return None, f"HTTP {response.status_code}"
+
+    try:
+        value = _select_sample(response.text, metric, labels)
+    except Exception as exc:  # noqa: BLE001 - パース失敗でページを落とさない
+        return None, f"パースできません: {type(exc).__name__}"
+
+    if value is None:
+        return None, "該当する系列がありません"
+    return value, ""
+
+
 async def _query_node_exporter(
     client: httpx.AsyncClient, endpoint: str, field_name: str
 ) -> tuple[float | None, str]:
@@ -186,6 +230,10 @@ async def fetch(client: httpx.AsyncClient, metric: Metric) -> MetricResult:
 
     if metric.source == "prometheus":
         value, detail = await _query_prometheus(client, metric.endpoint, metric.query)
+    elif metric.source == "prometheus_text":
+        value, detail = await _query_prometheus_text(
+            client, metric.endpoint, metric.metric_name, metric.labels
+        )
     elif metric.source == "node_exporter":
         value, detail = await _query_node_exporter(
             client, metric.endpoint, metric.field_name
@@ -197,6 +245,8 @@ async def fetch(client: httpx.AsyncClient, metric: Metric) -> MetricResult:
         format=metric.format,
         thresholds=metric.thresholds,
         detail=detail,
+        row=metric.row,
+        column=metric.column,
     )
 
 
@@ -219,6 +269,8 @@ async def fetch_all(
                     format=metric.format,
                     thresholds=metric.thresholds,
                     detail=f"取得に失敗: {result}",
+                    row=metric.row,
+                    column=metric.column,
                 )
             )
     return output
@@ -233,12 +285,16 @@ def format_value(value: float | None, fmt: str) -> str:
     if value is None:
         return "—"
 
+    # percent は 0〜1 の比率を受け取る（ロス率など）。
+    # percent100 は既に 0〜100 で来る値（湿度・電池残量など）。
     if fmt == "percent":
         return f"{value * 100:.1f} %"
+    if fmt == "percent100":
+        return f"{value:.0f} %"
     if fmt == "seconds_ms":
         return f"{value * 1000:.1f} ms"
     if fmt == "celsius":
-        return f"{value:.0f} °C"
+        return f"{value:.1f} °C"
     if fmt == "count":
         return f"{value:.0f}"
     if fmt == "bytes":

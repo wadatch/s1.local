@@ -12,6 +12,7 @@ from app.metrics import (
     MetricResult,
     _extract_node_fields,
     _cpu_samples,
+    _select_sample,
     fetch,
     fetch_all,
     format_value,
@@ -230,6 +231,100 @@ async def test_node_exporter_が落ちていても例外にならない(client):
     assert "取得失敗" in result.detail
 
 
+# --- prometheus_text（任意の /metrics）------------------------------------
+
+SWITCHBOT_TEXT = """\
+# HELP switchbot_temperature_celsius センサーの温度
+# TYPE switchbot_temperature_celsius gauge
+switchbot_temperature_celsius{device_id="AAA",device_name="リビング",device_type="MeterPlus"} 24.5
+switchbot_temperature_celsius{device_id="BBB",device_name="寝室",device_type="Meter"} 21.0
+# TYPE switchbot_battery_percent gauge
+switchbot_battery_percent{device_id="AAA",device_name="リビング",device_type="MeterPlus"} 92
+# TYPE switchbot_up gauge
+switchbot_up 1.0
+"""
+
+
+def test_ラベルで系列を選べる():
+    assert _select_sample(
+        SWITCHBOT_TEXT, "switchbot_temperature_celsius", {"device_name": "寝室"}
+    ) == 21.0
+
+
+def test_ラベルは部分一致でよい():
+    """センサーを増やしても services.yml 側は device_name だけ書けば済むこと。"""
+    assert _select_sample(
+        SWITCHBOT_TEXT, "switchbot_temperature_celsius", {"device_id": "AAA"}
+    ) == 24.5
+
+
+def test_ラベル指定なしなら最初の系列():
+    assert _select_sample(SWITCHBOT_TEXT, "switchbot_up", {}) == 1.0
+
+
+def test_該当しないラベルなら値なし():
+    assert _select_sample(
+        SWITCHBOT_TEXT, "switchbot_temperature_celsius", {"device_name": "書斎"}
+    ) is None
+
+
+def test_同名の別メトリクスと取り違えない():
+    assert _select_sample(
+        SWITCHBOT_TEXT, "switchbot_battery_percent", {"device_name": "リビング"}
+    ) == 92.0
+
+
+@respx.mock
+async def test_prometheus_text_から値を取得できる(client):
+    respx.get("http://sb:9110/metrics").mock(
+        return_value=httpx.Response(200, text=SWITCHBOT_TEXT)
+    )
+    metric = Metric(
+        label="リビング 温度",
+        source="prometheus_text",
+        endpoint="http://sb:9110",
+        metric_name="switchbot_temperature_celsius",
+        labels={"device_name": "リビング"},
+        format="celsius",
+    )
+    result = await fetch(client, metric)
+    assert result.value == 24.5
+    assert result.detail == ""
+
+
+@respx.mock
+async def test_センサーが消えていたら値なし扱い(client):
+    """電池切れなどで系列が消えたとき、古い値を出し続けないこと。"""
+    respx.get("http://sb:9110/metrics").mock(
+        return_value=httpx.Response(200, text=SWITCHBOT_TEXT)
+    )
+    metric = Metric(
+        label="書斎 温度",
+        source="prometheus_text",
+        endpoint="http://sb:9110",
+        metric_name="switchbot_temperature_celsius",
+        labels={"device_name": "書斎"},
+        format="celsius",
+    )
+    result = await fetch(client, metric)
+    assert result.value is None
+    assert "系列がありません" in result.detail
+
+
+@respx.mock
+async def test_exporter_が落ちていても例外にならない(client):
+    respx.get("http://sb:9110/metrics").mock(side_effect=httpx.ConnectError("x"))
+    metric = Metric(
+        label="リビング 温度",
+        source="prometheus_text",
+        endpoint="http://sb:9110",
+        metric_name="switchbot_temperature_celsius",
+    )
+    result = await fetch(client, metric)
+    assert result.value is None
+    assert "取得失敗" in result.detail
+
+
 # --- 段階（カードの色）---------------------------------------------------
 
 @pytest.mark.parametrize(
@@ -260,7 +355,10 @@ def test_閾値が無ければ常に_ok():
         (None, "raw", "—"),
         (0.0423, "percent", "4.2 %"),
         (0.0185, "seconds_ms", "18.5 ms"),
-        (57.4, "celsius", "57 °C"),
+        (57.4, "celsius", "57.4 °C"),
+        (24.5, "celsius", "24.5 °C"),
+        (55.0, "percent100", "55 %"),
+        (0.55, "percent", "55.0 %"),
         (3.0, "count", "3"),
         (0.0, "count", "0"),
         (512, "bytes", "512 B"),
