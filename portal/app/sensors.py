@@ -47,6 +47,44 @@ class Sensor:
         return self.enabled and not self.offline and self.temperature is None
 
     @property
+    def temperature_level(self) -> str:
+        """温度の段階。色を決めるのに使う。
+
+        一覧を眺めたときに、暑い部屋と寒い部屋が数字を読まずに目に入ること。
+        境目は日本の住宅で「快適」とされる 18〜26℃ を中心に置いている。
+        """
+        if self.temperature is None:
+            return "unknown"
+        if self.temperature <= 10:
+            return "cold"
+        if self.temperature <= 18:
+            return "cool"
+        if self.temperature <= 26:
+            return "comfort"
+        if self.temperature <= 30:
+            return "warm"
+        return "hot"
+
+    @property
+    def humidity_level(self) -> str:
+        """湿度の段階。40〜60% を快適とみなす。
+
+        乾燥側と多湿側で色の向きを変えているので、
+        どちらに振れているかが色だけで分かる。
+        """
+        if self.humidity is None:
+            return "unknown"
+        if self.humidity <= 30:
+            return "dry"
+        if self.humidity <= 40:
+            return "dryish"
+        if self.humidity <= 60:
+            return "comfort"
+        if self.humidity <= 70:
+            return "humidish"
+        return "humid"
+
+    @property
     def battery_level(self) -> str:
         """電池残量の段階。色を決めるのに使う。切れる前に気づけるように。"""
         if self.battery is None:

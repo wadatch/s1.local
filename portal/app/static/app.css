@@ -18,6 +18,11 @@
   --unknown: #8a919e;
   --unknown-bg: #eef0f3;
 
+  /* 寒暖と乾湿。青いほど冷たい／湿っている、赤いほど暑い、
+     黄色いほど乾いている、という向きでそろえてある。 */
+  --cold: #1f6fb5;
+  --cool: #4c9be8;
+
   --radius: 10px;
 }
 
@@ -38,6 +43,9 @@
     --crit-bg: #3a1d1d;
     --unknown: #7a8494;
     --unknown-bg: #22272f;
+
+    --cold: #6db4f0;
+    --cool: #4c9be8;
   }
 }
 
@@ -495,6 +503,48 @@ table.sensors .strong {
   -webkit-mask-image: url("/static/icons/battery-charging.svg");
   mask-image: url("/static/icons/battery-charging.svg");
 }
+
+/* --- 値の色分け ----------------------------------------------------------
+   一覧を眺めたときに、暑い部屋・乾いた部屋・電池が減っているセンサーが
+   数字を読まずに目に入ること。青いほど冷たい／湿っている、赤いほど暑い、
+   黄色いほど乾いている、という向きでそろえてある。 */
+
+td.temp-cold { color: var(--cold); }
+td.temp-cool { color: var(--cool); }
+td.temp-comfort { color: var(--ok); }
+td.temp-warm { color: var(--warn); }
+td.temp-hot { color: var(--crit); }
+td.temp-unknown { color: var(--unknown); }
+
+td.hum-dry { color: var(--warn); }
+td.hum-dryish { color: var(--warn); opacity: 0.75; }
+td.hum-comfort { color: var(--ok); }
+td.hum-humidish { color: var(--cool); }
+td.hum-humid { color: var(--cold); }
+td.hum-unknown { color: var(--unknown); }
+
+/* 色の見本。td 以外でも同じ色が出るようにしておく。 */
+.colour-key .key {
+  font-weight: 600;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+
+.key.temp-cold { color: var(--cold); }
+.key.temp-comfort { color: var(--ok); }
+.key.temp-hot { color: var(--crit); }
+.key.hum-dry { color: var(--warn); }
+.key.hum-comfort { color: var(--ok); }
+.key.hum-humid { color: var(--cold); }
+.key.bat-ok { color: var(--ok); }
+.key.bat-warn { color: var(--warn); }
+.key.bat-crit { color: var(--crit); }
+
+/* 電池は残量そのものが色。満充電を緑にしておかないと、
+   減っている赤・黄だけが浮いて「異常表示」に見えてしまう。 */
+td.cell-battery.level-ok { color: var(--ok); }
+td.cell-battery.level-warn { color: var(--warn); }
+td.cell-battery.level-crit { color: var(--crit); }
 
 /* 給電されているデバイスは残量の話ではないので、控えめに出す。 */
 td.cell-battery.level-none { color: var(--text-muted); }

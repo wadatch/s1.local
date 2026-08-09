@@ -128,6 +128,38 @@ def test_給電デバイスは電池を持たない():
 
 
 @pytest.mark.parametrize(
+    "temperature, expected",
+    [
+        (-5, "cold"), (10, "cold"),
+        (10.1, "cool"), (18, "cool"),
+        (18.1, "comfort"), (26, "comfort"),
+        (26.1, "warm"), (30, "warm"),
+        (30.1, "hot"), (38, "hot"),
+        (None, "unknown"),
+    ],
+)
+def test_温度の段階(temperature, expected):
+    """数字を読まずに、暑い部屋・寒い部屋が目に入ること。"""
+    assert Sensor("x", "x", "x", temperature=temperature).temperature_level == expected
+
+
+@pytest.mark.parametrize(
+    "humidity, expected",
+    [
+        (0, "dry"), (30, "dry"),
+        (31, "dryish"), (40, "dryish"),
+        (41, "comfort"), (60, "comfort"),
+        (61, "humidish"), (70, "humidish"),
+        (71, "humid"), (95, "humid"),
+        (None, "unknown"),
+    ],
+)
+def test_湿度の段階(humidity, expected):
+    """乾燥側と多湿側で色の向きが変わるので、段階も両側に分ける。"""
+    assert Sensor("x", "x", "x", humidity=humidity).humidity_level == expected
+
+
+@pytest.mark.parametrize(
     "battery, expected",
     [(100, "ok"), (31, "ok"), (30, "warn"), (11, "warn"), (10, "crit"), (0, "crit")],
 )
