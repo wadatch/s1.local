@@ -652,13 +652,20 @@ table.sensors form { margin: 0; }
   flex: none;
 }
 
-.charts { display: grid; gap: 16px; }
+/* minmax(0, 1fr) にしないと、中のグラフの最小幅がトラックを押し広げ、
+   ページ全体が画面より広くなる（スマホでは全体がズームアウトして見える）。 */
+.charts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
 
 .chart-card {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px 12px;
+  min-width: 0;
 }
 
 .chart-card h2 {
@@ -667,16 +674,16 @@ table.sensors form { margin: 0; }
   font-weight: 600;
 }
 
-/* グラフが狭い画面でも潰れないように、中だけ横スクロールさせる。
-   ツールチップを中に重ねるので position: relative。 */
+/* ツールチップを中に重ねるので position: relative。 */
 .chart-scroll {
-  overflow-x: auto;
   position: relative;
+  min-width: 0;
 }
 
+/* 画面幅に合わせて描くので、拡大縮小はしない。
+   viewBox を実寸に合わせているため、文字が横に潰れない。 */
 .chart {
   width: 100%;
-  min-width: 520px;
   height: 260px;
   display: block;
 }

@@ -189,7 +189,23 @@ function renderSpan(payload) {
 
 // --- 描画 -----------------------------------------------------------------
 
+/** 描く幅。カードの内側の余白ぶんを引いた実寸を使う。
+ *
+ * viewBox を実寸に合わせることで、拡大縮小が起きず文字が横に潰れない。
+ * 固定幅にして拡大縮小に任せると、スマホでは文字が半分の幅に潰れるうえ、
+ * 最小幅がページ全体を押し広げて画面ごとズームアウトしてしまう。
+ */
+function chartWidth() {
+  const container = document.getElementById("charts");
+  const available = container ? container.clientWidth : 900;
+  return Math.max(280, Math.min(1200, available - 34));
+}
+
+// 画面の幅が変わったら描き直す。取り直しは要らないので値は覚えておく。
+let lastSeries = null;
+
 function render(series) {
+  lastSeries = series;
   const charts = document.getElementById("charts");
   charts.innerHTML = "";
 
@@ -289,9 +305,10 @@ function nearestPoint(points, t) {
 }
 
 function buildChart(series, key, unit) {
-  const width = 900;
+  const width = chartWidth();
   const height = 260;
-  const pad = { top: 12, right: 16, bottom: 28, left: 46 };
+  const narrow = width < 480;
+  const pad = { top: 12, right: narrow ? 10 : 16, bottom: 28, left: narrow ? 38 : 46 };
 
   const points = series.flatMap((s) =>
     s.points.filter((p) => p[key] !== null && p[key] !== undefined)
@@ -322,7 +339,6 @@ function buildChart(series, key, unit) {
   const svg = el("svg", {
     viewBox: `0 0 ${width} ${height}`,
     class: "chart",
-    preserveAspectRatio: "none",
     role: "img",
   });
 
@@ -336,9 +352,9 @@ function buildChart(series, key, unit) {
     svg.appendChild(text);
   }
 
-  // 縦の目盛り
+  // 縦の目盛り。狭い画面では数を減らさないと文字が重なる。
   const spanHours = (maxT - minT) / 3600;
-  const steps = 5;
+  const steps = narrow ? 3 : 5;
   for (let i = 0; i <= steps; i++) {
     const t = minT + ((maxT - minT) * i) / steps;
     const text = el("text", {
@@ -429,8 +445,8 @@ function buildChart(series, key, unit) {
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0) return;
 
-    // preserveAspectRatio="none" なので、画面上の座標は viewBox に
-    // 横方向へ一次変換すれば戻せる。
+    // viewBox は実寸に合わせてあるので基本は 1:1 だが、描き直す前に
+    // 画面幅が変わっていることがあるので、比率で戻しておく。
     const viewX = ((event.clientX - rect.left) / rect.width) * width;
     if (viewX < pad.left || viewX > width - pad.right) {
       hide();
@@ -563,4 +579,18 @@ setupRefresh({
   onRefresh: load,
   intervalMs: REFRESH_INTERVAL_MS,
   shouldSkipAuto: () => pointerOnChart,
+});
+
+// 画面の幅が変わったら描き直す（横向きにした、ウィンドウを広げたなど）。
+// 値は覚えてあるので取り直しは要らない。
+let resizeTimer = null;
+let lastWidth = window.innerWidth;
+
+window.addEventListener("resize", () => {
+  if (window.innerWidth === lastWidth) return;   // 縦だけの変化は無視する
+  lastWidth = window.innerWidth;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (lastSeries) render(lastSeries);
+  }, 200);
 });
