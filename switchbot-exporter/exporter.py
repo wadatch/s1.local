@@ -18,18 +18,28 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import logging
 import os
 import threading
 import time
 import uuid
 from dataclasses import dataclass, field
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
-from prometheus_client import REGISTRY, start_http_server
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 from prometheus_client.core import GaugeMetricFamily
 
 API_BASE = "https://api.switch-bot.com"
+
+# 手で取得を要求されたときの歯止め。
+#
+# 取得 1 回でセンサー台数 + 1 回ぶん API を使う。定期取得（10 分ごと）で
+# 1 日 2,900 回ほど使っているので、上限 10,000 回に対する余りは 7,000 回ほど。
+# それを使い切らないよう、間隔と 1 日の回数の両方で抑える。
+MANUAL_MIN_GAP_SECONDS = 60
+MANUAL_DAILY_BUDGET = 150
 
 # 温度を報告するデバイス種別。SwitchBot は種別名を増やしていくので、
 # ここに載っていなくても temperature を持っていれば拾う方針にしている
@@ -132,6 +142,13 @@ class State:
     last_success: float = 0.0
     api_errors: int = 0
     up: bool = False
+    # 取得が 1 回終わるたびに増える。手動要求が「取り終わったか」を
+    # 待つのに使う。時刻で待つと、取得が速いときに取りこぼす。
+    poll_seq: int = 0
+    # 手動要求の歯止め用
+    last_poll_at: float = 0.0
+    manual_used: int = 0
+    manual_window_start: float = 0.0
 
 
 def looks_offline(status: dict) -> bool:
@@ -241,6 +258,8 @@ def poll_once(
 
     with state.lock:
         state.last_success = time.time()
+        state.last_poll_at = state.last_success
+        state.poll_seq += 1
         state.up = True
 
 
@@ -384,8 +403,54 @@ def watch_config(state: State, config_path: str, interval: float = 15.0) -> None
         time.sleep(interval)
 
 
+def request_manual_poll(
+    state: State, wake: threading.Event, now: float | None = None
+) -> tuple[bool, str]:
+    """画面から「今すぐ取って」と言われたときの受け口。
+
+    受け付けたら True。断るときは理由を返す。断るのは 2 つの場合だけ。
+
+    - 取ったばかり（60 秒以内）… 値は 10 分ごとにしか変わらないので、
+      連打しても API を使うだけで得るものがない
+    - 1 日の回数を使い切った … 定期取得のぶんを食いつぶさないため
+    """
+    now = time.time() if now is None else now
+
+    with state.lock:
+        if now - state.manual_window_start >= 86400:
+            state.manual_window_start = now
+            state.manual_used = 0
+
+        if state.last_poll_at and now - state.last_poll_at < MANUAL_MIN_GAP_SECONDS:
+            remaining = int(MANUAL_MIN_GAP_SECONDS - (now - state.last_poll_at)) + 1
+            return False, f"取得したばかりです（あと {remaining} 秒）"
+
+        if state.manual_used >= MANUAL_DAILY_BUDGET:
+            return False, "手動での取得が 1 日の上限に達しました"
+
+        state.manual_used += 1
+
+    wake.set()
+    return True, ""
+
+
+def wait_for_poll(state: State, since: int, timeout: float = 25.0) -> bool:
+    """取得が 1 回終わるまで待つ。終わったら True。"""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with state.lock:
+            if state.poll_seq != since:
+                return True
+        time.sleep(0.1)
+    return False
+
+
 def run_poller(
-    client: SwitchBotClient, state: State, interval: float, config_path: str
+    client: SwitchBotClient,
+    state: State,
+    interval: float,
+    config_path: str,
+    wake: threading.Event,
 ) -> None:
     while True:
         # 毎周期で読み直す。センサーを外したときにコンテナの再起動が
@@ -401,9 +466,16 @@ def run_poller(
             with state.lock:
                 state.api_errors += 1
                 state.up = False
+                # 失敗も「取得を試みた時刻」として扱う。そうしないと
+                # 失敗している間、手動要求が歯止めなしに通ってしまう。
+                state.last_poll_at = time.time()
+                state.poll_seq += 1
             # 直前の値は捨てない。ポータル側は経過秒数で古さを判断できる。
             log.error("ポーリングに失敗しました: %s", exc)
-        time.sleep(interval)
+
+        # 手で要求されたら待たずに次へ進む。
+        wake.wait(interval)
+        wake.clear()
 
 
 def _credentials() -> tuple[str, str]:
@@ -469,6 +541,63 @@ def list_devices() -> None:
     client.close()
 
 
+def make_handler(state: State, wake: threading.Event):
+    """/metrics に加えて POST /refresh を受ける。
+
+    prometheus_client の start_http_server は /metrics しか出せないので、
+    自前で立てている。
+    """
+
+    class Handler(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def _send(self, status: int, body: bytes, content_type: str) -> None:
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler の作法
+            if self.path.split("?")[0] == "/metrics":
+                self._send(200, generate_latest(REGISTRY), CONTENT_TYPE_LATEST)
+            else:
+                self._send(404, b"not found\n", "text/plain; charset=utf-8")
+
+        def do_POST(self) -> None:  # noqa: N802
+            if self.path.split("?")[0] != "/refresh":
+                self._send(404, b"not found\n", "text/plain; charset=utf-8")
+                return
+
+            with state.lock:
+                before = state.poll_seq
+
+            accepted, reason = request_manual_poll(state, wake)
+            if not accepted:
+                # 断っただけで異常ではない。値は今あるものがそのまま使える。
+                self._send(
+                    429,
+                    json.dumps({"triggered": False, "reason": reason},
+                               ensure_ascii=False).encode("utf-8"),
+                    "application/json; charset=utf-8",
+                )
+                return
+
+            completed = wait_for_poll(state, before)
+            self._send(
+                200,
+                json.dumps({"triggered": True, "completed": completed},
+                           ensure_ascii=False).encode("utf-8"),
+                "application/json; charset=utf-8",
+            )
+
+        def log_message(self, *args) -> None:
+            # 既定では 1 リクエストごとに標準エラーへ出る。うるさいので黙らせる。
+            pass
+
+    return Handler
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s"
@@ -482,11 +611,12 @@ def main() -> None:
 
     state = State()
     client = SwitchBotClient(token, secret)
+    wake = threading.Event()
     REGISTRY.register(SwitchBotCollector(state))
 
     threading.Thread(
         target=run_poller,
-        args=(client, state, interval, config_path),
+        args=(client, state, interval, config_path, wake),
         daemon=True,
     ).start()
 
@@ -496,8 +626,7 @@ def main() -> None:
     ).start()
 
     log.info("待ち受け開始 :%d（取得間隔 %.0f 秒）", port, interval)
-    start_http_server(port)
-    threading.Event().wait()
+    ThreadingHTTPServer(("", port), make_handler(state, wake)).serve_forever()
 
 
 if __name__ == "__main__":

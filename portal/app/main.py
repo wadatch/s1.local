@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from contextlib import asynccontextmanager, closing, suppress
@@ -36,6 +37,8 @@ SWITCHBOT_EXPORTER_URL = os.environ.get(
 # 重複はサンプル時刻の丸めで落ちるので短くしても行は増えない。
 HISTORY_INTERVAL = float(os.environ.get("HISTORY_INTERVAL_SECONDS", "120"))
 HISTORY_KEEP_DAYS = float(os.environ.get("HISTORY_KEEP_DAYS", "90"))
+
+log = logging.getLogger("portal")
 
 registry_cache = RegistryCache(SERVICES_FILE)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -282,6 +285,48 @@ async def graphs_page(request: Request) -> HTMLResponse:
             "error": error,
         },
     )
+
+
+@app.post("/api/switchbot/refresh")
+async def api_switchbot_refresh() -> JSONResponse:
+    """SwitchBot から今すぐ取り直させる。
+
+    「更新」を押したときの話。押しても値が変わらないのは、exporter の
+    キャッシュを読み直しているだけで、SwitchBot に取りに行っていないため。
+    ここで exporter に取り直しを頼む。
+
+    取得には数秒かかるので、待ち時間は死活チェック用の短いものではなく
+    別に取っている。断られること（取ったばかり等）は異常ではない。
+    """
+    try:
+        response = await app.state.client.post(
+            f"{SWITCHBOT_EXPORTER_URL.rstrip('/')}/refresh", timeout=40.0
+        )
+    except httpx.HTTPError as exc:
+        return JSONResponse(
+            {"triggered": False, "reason": f"exporter に頼めません: {type(exc).__name__}"}
+        )
+
+    try:
+        result = response.json()
+    except ValueError:
+        return JSONResponse(
+            {"triggered": False, "reason": "exporter の応答を解釈できません"}
+        )
+
+    # 取り直せたなら、その場で履歴にも入れる。記録役は 2 分ごとなので、
+    # これが無いとグラフだけ新しい点が出てこない。
+    if result.get("completed"):
+        try:
+            found, error = await _load_sensors()
+            if not error and found:
+                with closing(history_mod.connect()) as connection:
+                    history_mod.init(connection)
+                    history_mod.record(connection, found)
+        except Exception as exc:  # noqa: BLE001 - 記録の失敗で更新を失敗にしない
+            log.warning("取り直し後の記録に失敗しました: %s", exc)
+
+    return JSONResponse(result)
 
 
 @app.get("/api/history")

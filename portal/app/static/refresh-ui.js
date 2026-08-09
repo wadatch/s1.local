@@ -38,7 +38,9 @@
         button.setAttribute("aria-busy", "true");
       }
       try {
-        await onRefresh();
+        // 手で押したときだけ、元のデータ自体を取り直させる。
+        // 自動更新でやると API の回数を使い切る。
+        await onRefresh(manual);
       } finally {
         running = false;
         if (button) {

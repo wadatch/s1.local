@@ -138,7 +138,17 @@ function renderUpdatedAt(epochSeconds) {
   el.dateTime = date.toISOString();
 }
 
-async function refresh() {
+async function refresh(manual) {
+  if (manual) {
+    // 押したのに数字が動かない、を避ける。SwitchBot から取り直させてから読む。
+    const result = await pokeSwitchBot();
+    showRefreshNote(
+      result.triggered
+        ? (result.completed ? "取り直しました" : "取り直しています…")
+        : result.reason || ""
+    );
+  }
+
   let payload;
   try {
     const response = await fetch("/api/sensors", { cache: "no-store" });

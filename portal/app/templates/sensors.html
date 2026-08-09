@@ -28,6 +28,7 @@
               title="今すぐ更新する">
         <span class="refresh-icon">↻</span> 更新
       </button>
+      <span id="refresh-note" class="refresh-note"></span>
     </p>
   </div>
 </header>
@@ -160,8 +161,10 @@
 </p>
 
 <p class="note">
-  この表は 30 秒ごとに自動で更新される。
-  すぐ見たいときは「更新」ボタン、スマホでは画面を下に引っ張っても更新できる。
+  この表は 30 秒ごとに自動で更新される（画面の描き直しだけ）。
+  <strong>「更新」ボタンとスマホの引っ張り更新は、SwitchBot から値を取り直す。</strong>
+  ただし取ったばかりのときは断る（値は 10 分ごとにしか変わらないので、
+  連打しても API の回数を使うだけになる）。
 </p>
 
 <p class="note colour-key">
@@ -206,6 +209,7 @@
   </p>
 </footer>
 
+<script src="/static/switchbot-refresh.js" defer></script>
 <script src="/static/refresh-ui.js" defer></script>
 <script src="/static/sensors.js" defer></script>
 </body>

@@ -23,6 +23,7 @@
               title="今すぐ更新する">
         <span class="refresh-icon">↻</span> 更新
       </button>
+      <span id="refresh-note" class="refresh-note"></span>
     </p>
   </div>
 </header>
@@ -98,8 +99,9 @@
 
 <p class="note">
   選んだセンサーと期間はこのブラウザに残るので、次に開いたときも同じ状態で出る。
-  グラフは 1 分ごとに自動で更新される（触っている間は邪魔しないよう見送る）。
-  すぐ見たいときは「更新」ボタン、スマホでは画面を下に引っ張っても更新できる。
+  グラフは 1 分ごとに自動で描き直される（触っている間は邪魔しないよう見送る）。
+  <strong>「更新」ボタンとスマホの引っ張り更新は、SwitchBot から値を取り直して
+  新しい点を足す。</strong>取ったばかりのときは断る。
 </p>
 
 <p class="note">
@@ -114,6 +116,7 @@
   <p>取得を止めているセンサーは記録されないため、ここには出ない。</p>
 </footer>
 
+<script src="/static/switchbot-refresh.js" defer></script>
 <script src="/static/refresh-ui.js" defer></script>
 <script src="/static/graphs.js" defer></script>
 </body>

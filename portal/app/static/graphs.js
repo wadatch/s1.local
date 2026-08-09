@@ -137,7 +137,17 @@ function paintSwatches() {
 
 // --- 取得 -----------------------------------------------------------------
 
-async function load() {
+async function load(manual) {
+  if (manual) {
+    // 押したときは、履歴に新しい点が増えてから描く。
+    const result = await pokeSwitchBot();
+    showRefreshNote(
+      result.triggered
+        ? (result.completed ? "取り直しました" : "取り直しています…")
+        : result.reason || ""
+    );
+  }
+
   state.devices = selectedDevices();
   syncHomeChecks();
   paintSwatches();
