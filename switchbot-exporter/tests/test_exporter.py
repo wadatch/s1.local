@@ -9,6 +9,7 @@
 import base64
 import hashlib
 import hmac
+import threading
 
 import httpx
 import pytest
@@ -24,7 +25,10 @@ from exporter import (
     load_excluded,
     looks_offline,
     poll_once,
+    request_manual_poll,
     sign_headers,
+    MANUAL_DAILY_BUDGET,
+    MANUAL_MIN_GAP_SECONDS,
 )
 
 TOKEN = "test-token"
@@ -223,6 +227,90 @@ def test_除外したデバイスは状態を問い合わせない():
     assert excluded_route.call_count == 0, "除外したデバイスに問い合わせている"
     assert set(state.readings) == {"BBB"}
     assert state.offline == {}, "除外は「不調」ではないので計上しないこと"
+
+
+# --- 手で「今すぐ取って」と言われたとき ------------------------------------
+#
+# 画面の「更新」を押しても値が変わらない、を避けるための入口。
+# ただし取得 1 回でセンサー台数ぶん API を使うので、歯止めが要る。
+
+NOW = 1_800_000_000.0
+
+
+def test_手動要求で取得を起こせる():
+    state, wake = State(), threading.Event()
+    accepted, reason = request_manual_poll(state, wake, now=NOW)
+    assert accepted and reason == ""
+    assert wake.is_set(), "ポーラーを起こしていない"
+
+
+def test_取ったばかりなら断る():
+    """値は 10 分ごとにしか変わらない。連打しても API を使うだけ。"""
+    state, wake = State(), threading.Event()
+    state.last_poll_at = NOW - 10
+
+    accepted, reason = request_manual_poll(state, wake, now=NOW)
+
+    assert not accepted
+    assert "取得したばかり" in reason
+    assert not wake.is_set()
+
+
+def test_間隔が空いていれば通す():
+    state, wake = State(), threading.Event()
+    state.last_poll_at = NOW - MANUAL_MIN_GAP_SECONDS - 1
+    assert request_manual_poll(state, wake, now=NOW)[0]
+
+
+def test_断ったぶんは回数を消費しない():
+    state, wake = State(), threading.Event()
+    state.last_poll_at = NOW - 1
+    request_manual_poll(state, wake, now=NOW)
+    assert state.manual_used == 0
+
+
+def test_一日の上限に達したら断る():
+    """定期取得のぶんを食いつぶさないため。"""
+    state, wake = State(), threading.Event()
+    state.manual_window_start = NOW
+    state.manual_used = MANUAL_DAILY_BUDGET
+
+    accepted, reason = request_manual_poll(state, wake, now=NOW)
+
+    assert not accepted
+    assert "上限" in reason
+
+
+def test_一日たてば回数が戻る():
+    state, wake = State(), threading.Event()
+    state.manual_window_start = NOW - 86401
+    state.manual_used = MANUAL_DAILY_BUDGET
+
+    assert request_manual_poll(state, wake, now=NOW)[0]
+    assert state.manual_used == 1
+
+
+def test_一度も取っていなければ通す():
+    """起動直後に押されたとき。last_poll_at が 0 でも断らないこと。"""
+    assert request_manual_poll(State(), threading.Event(), now=NOW)[0]
+
+
+@respx.mock
+def test_取得のたびに回数が進む():
+    """手動要求が「取り終わったか」を待つのに使う。"""
+    respx.get("https://api.switch-bot.com/v1.1/devices").mock(
+        return_value=httpx.Response(200, json=DEVICES_BODY)
+    )
+    respx.get(url__regex=r".*/status").mock(
+        return_value=httpx.Response(200, json=status_body(20.0, 40, 50))
+    )
+
+    state = State()
+    assert state.poll_seq == 0
+    poll_once(SwitchBotClient(TOKEN, SECRET), state)
+    assert state.poll_seq == 1
+    poll_once(SwitchBotClient(TOKEN, SECRET), state)
+    assert state.poll_seq == 2
 
 
 # --- 取得 ON/OFF の即時反映 -----------------------------------------------

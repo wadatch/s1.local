@@ -121,6 +121,13 @@ body {
 
 .refresh-icon { display: inline-block; }
 
+/* 取り直しの結果や、断られた理由をここに短く出す。 */
+.refresh-note {
+  margin-left: 10px;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
 /* 更新中はアイコンを回す。押した手応えを出すため。 */
 .refresh-button[aria-busy="true"] .refresh-icon {
   animation: refresh-spin 0.8s linear infinite;
