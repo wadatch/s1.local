@@ -1,6 +1,11 @@
 # s1.local ホームポータル
 
-`http://s1.local/` — 我が家のサーバ s1 で動いているものを 1 画面に集約する入口。
+我が家のサーバ s1 で動いているものを 1 画面に集約する入口。
+
+| 入口 | 用途 |
+|---|---|
+| `http://s1.local/` | 宅内 LAN から手軽に |
+| `https://s1.tail981a3e.ts.net/` | 本物の証明書つき。Tailscale 経由で宅内外とも |
 
 ## 設計の中心にあるもの
 
@@ -18,9 +23,9 @@ Python コードは触らない。コンテナの再起動もしない。
 ## 構成
 
 ```
-[ブラウザ] --:80--> [portal-caddy] --> [portal-app] --> na-prometheus     （数値）
-                          |                        `-> portal-node-exporter（ホストの状態）
-                          `-- /grafana, /prometheus --> 302 で既存サービスへ
+[ブラウザ] --:80 / :443--> [portal-caddy] --> [portal-app] --> na-prometheus     （数値）
+                                 |                        `-> portal-node-exporter（ホストの状態）
+                                 `-- /grafana, /prometheus --> 302 で既存サービスへ
 ```
 
 | コンテナ | 役割 |
@@ -125,9 +130,37 @@ make logs     # ログ追尾
 `.env` は rsync の対象外。初回だけ `.env.example` からコピーされる。
 `BIND_ADDR` は `0.0.0.0` でないと別マシンから見られない。
 
+### HTTPS は Tailscale の名前でだけ張っている
+
+**`s1.local` には公的に信頼される証明書を発行できない。** `.local` は mDNS 用の
+予約 TLD で、所有を証明する手段が無いため公的 CA は発行しない。これは設定の
+問題ではなく原理的な制約なので、`s1.local` を HTTPS にする道は
+「自己署名 + 全端末にルート CA を手動インストール」しかない。
+
+代わりに Tailscale の MagicDNS 名 `s1.tail981a3e.ts.net` に対して
+**本物の Let's Encrypt 証明書**を張っている。証明書は Caddy が tailscaled の
+LocalAPI（`/var/run/tailscale/tailscaled.sock`）から受け取る。ACME は使わない。
+更新も Caddy と tailscaled が自動でやる。**端末側の作業はゼロ。**
+
+そのため `docker-compose.yml` で以下を渡している。どちらも消すと HTTPS が壊れる。
+
+- `/var/run/tailscale:/var/run/tailscale:ro`（証明書の受け取り口）
+- `TS_HOSTNAME`（HTTPS を張る名前。`tailscale status --json` の `CertDomains`）
+
+証明書の発行には root 権限が要る。Caddy コンテナは root で動くので通っている。
+
+**Tailscale に入っていない端末からは ts.net 名を使えない。** 来客の PC や
+家族の未参加端末は `http://s1.local/` を使うことになる。両方の入口を
+残してあるのはこのため。
+
+**`/grafana` への 1 区間だけは HTTP のまま。** Grafana 自身が平文 HTTP で
+動いているため。ただし ts.net 経由なら Tailscale が WireGuard で暗号化するので、
+通信路が平文になるわけではない。ブラウザの鍵マークは外れる。
+
 ## やっていないこと
 
-- **HTTPS**：宅内 LAN と Tailscale からの利用が前提。証明書運用のコストに見合わない
+- **`s1.local` の HTTPS 化**：上記のとおり全端末へのルート CA インストールが
+  必要になる。家族の端末が増えるたびに再作業が発生するので割に合わない
 - **ポータルの認証**：出しているのは死活とサマリ数値のみ。Grafana 側は従来どおりログインが要る
 - **ホスト指標の履歴**：node_exporter を直接読んで現在値だけを出している。
   履歴が要るなら Prometheus に scrape job を足し、`services.yml` の

@@ -32,7 +32,7 @@ ps:
 check:
 	docker compose config --quiet
 	docker run --rm -v "$(CURDIR)/Caddyfile:/etc/caddy/Caddyfile:ro" \
-		-e PORTAL_HOST=s1.local caddy:2.9-alpine caddy validate --config /etc/caddy/Caddyfile
+		-e TS_HOSTNAME=example.ts.net caddy:2.9-alpine caddy validate --config /etc/caddy/Caddyfile
 	docker build -q -t s1-portal/portal:local ./portal >/dev/null
 	docker run --rm -v "$(CURDIR)/config:/app/config:ro" s1-portal/portal:local \
 		python -m app.registry --validate /app/config/services.yml

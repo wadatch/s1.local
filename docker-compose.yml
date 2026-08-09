@@ -10,12 +10,15 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      # Tailscale から HTTPS 証明書を受け取るための LocalAPI ソケット。
+      # 証明書の発行には root 権限が要る。Caddy コンテナは root で動くので通る。
+      - /var/run/tailscale:/var/run/tailscale:ro
     environment:
-      # Caddyfile 内のリダイレクト先に使う。ブラウザから見えるホスト名なので
-      # コンテナ名ではなく LAN 上の名前を入れる。
-      PORTAL_HOST: ${PORTAL_HOST:-s1.local}
+      # HTTPS を張る Tailscale MagicDNS 名。
+      TS_HOSTNAME: ${TS_HOSTNAME:-s1.tail981a3e.ts.net}
     ports:
       - "${BIND_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:80"
+      - "${BIND_ADDR:-0.0.0.0}:${HTTPS_PORT:-443}:443"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
       interval: 30s
