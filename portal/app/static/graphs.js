@@ -553,18 +553,14 @@ if (!restoreSelection()) {
       .forEach((box) => { box.checked = true; });
   }
 }
-load();
-
-// --- 自動更新 -------------------------------------------------------------
+// --- 更新 -----------------------------------------------------------------
 //
-// 描き直すとツールチップが消えるので、グラフを触っている間は見送る。
-// 見ていないタブでも問い合わせない。
+// 自動更新・更新ボタン・引っ張って更新の面倒は refresh-ui.js が見る。
+// 描き直すとツールチップが消えるので、グラフを触っている間は
+// 自動更新だけ見送る（手で押したときは触っていても更新する）。
 
-setInterval(() => {
-  if (document.hidden || pointerOnChart) return;
-  load();
-}, REFRESH_INTERVAL_MS);
-
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) load();
+setupRefresh({
+  onRefresh: load,
+  intervalMs: REFRESH_INTERVAL_MS,
+  shouldSkipAuto: () => pointerOnChart,
 });

@@ -319,6 +319,8 @@ def test_センサー一覧の行に自動更新用の目印が付く(make_app, 
     assert 'data-state="stopped"' in body
     assert 'cell-temperature' in body, "差し替える先のセルに目印が要る"
     assert '/static/sensors.js' in body
+    assert '/static/refresh-ui.js' in body
+    assert 'data-refresh-button' in body, "手で更新する手段が要る"
 
 
 def test_グラフページが自動更新のスクリプトを読む(make_app):
@@ -326,6 +328,8 @@ def test_グラフページが自動更新のスクリプトを読む(make_app):
     with TestClient(main_module.app) as client:
         body = client.get("/graphs").text
     assert "/static/graphs.js" in body
+    assert "/static/refresh-ui.js" in body
+    assert "data-refresh-button" in body
 
 
 def test_healthz(make_app):

@@ -22,7 +22,13 @@
       {%- if offline %}／{{ offline | length }} 台が値なし{% endif %}
       {%- if stopped %}／{{ stopped | length }} 台は取得停止中{% endif %}
     </p>
-    <p class="updated">最終更新 <time id="updated-at">—</time></p>
+    <p class="updated">
+      最終更新 <time id="updated-at">—</time>
+      <button type="button" class="refresh-button" data-refresh-button
+              title="今すぐ更新する">
+        <span class="refresh-icon">↻</span> 更新
+      </button>
+    </p>
   </div>
 </header>
 
@@ -144,6 +150,7 @@
 
 <p class="note">
   この表は 30 秒ごとに自動で更新される。
+  すぐ見たいときは「更新」ボタン、スマホでは画面を下に引っ張っても更新できる。
 </p>
 
 <p class="note">
@@ -162,6 +169,7 @@
   </p>
 </footer>
 
+<script src="/static/refresh-ui.js" defer></script>
 <script src="/static/sensors.js" defer></script>
 </body>
 </html>
