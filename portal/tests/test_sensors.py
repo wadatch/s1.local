@@ -127,6 +127,54 @@ def test_給電デバイスは電池を持たない():
     assert sensor.battery_level == "none"
 
 
+# --- 不快指数 --------------------------------------------------------------
+
+def test_不快指数を計算できる():
+    """DI = 0.81T + 0.01H(0.99T - 14.3) + 46.3"""
+    s = Sensor("x", "x", "x", temperature=28.0, humidity=60.0)
+    expected = 0.81 * 28 + 0.01 * 60 * (0.99 * 28 - 14.3) + 46.3
+    assert s.discomfort == pytest.approx(expected)
+    # 28℃ / 60% は「暑くて汗が出る」の一歩手前
+    assert s.discomfort == pytest.approx(77.0, abs=0.1)
+
+
+def test_同じ温度でも湿度で不快指数が変わる():
+    """温度だけでは体感が分からない、というのがこの指標を出す理由。"""
+    dry = Sensor("x", "x", "x", temperature=28.0, humidity=40.0).discomfort
+    humid = Sensor("x", "x", "x", temperature=28.0, humidity=80.0).discomfort
+    assert humid > dry + 4
+
+
+@pytest.mark.parametrize("temperature, humidity", [(None, 50.0), (25.0, None), (None, None)])
+def test_片方でも欠けていれば不快指数は出さない(temperature, humidity):
+    s = Sensor("x", "x", "x", temperature=temperature, humidity=humidity)
+    assert s.discomfort is None
+    assert s.discomfort_level == "unknown"
+    assert s.discomfort_text == "—"
+
+
+@pytest.mark.parametrize(
+    "temperature, humidity, expected",
+    [
+        (0.0, 50.0, "cold"),        # DI 約 46
+        (13.0, 50.0, "cool"),       # DI 約 58
+        (20.0, 50.0, "comfort"),    # DI 約 65
+        (27.0, 60.0, "warm"),       # DI 約 76
+        (30.0, 70.0, "hot"),        # DI 約 82
+        (35.0, 80.0, "severe"),     # DI 約 90
+    ],
+)
+def test_不快指数の段階(temperature, humidity, expected):
+    s = Sensor("x", "x", "x", temperature=temperature, humidity=humidity)
+    assert s.discomfort_level == expected
+
+
+def test_不快指数の言い換え():
+    """数字だけでは何を意味するのか分からないため。"""
+    s = Sensor("x", "x", "x", temperature=20.0, humidity=50.0)
+    assert s.discomfort_text == "快適"
+
+
 @pytest.mark.parametrize(
     "temperature, expected",
     [
