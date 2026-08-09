@@ -25,6 +25,9 @@ class MetricResult:
     format: str
     thresholds: dict[str, float]
     detail: str = ""
+    # layout=matrix のカードで、この値をどのマスに置くか。設定から素通しする。
+    row: str = ""
+    column: str = ""
 
     @property
     def level(self) -> str:
@@ -242,6 +245,8 @@ async def fetch(client: httpx.AsyncClient, metric: Metric) -> MetricResult:
         format=metric.format,
         thresholds=metric.thresholds,
         detail=detail,
+        row=metric.row,
+        column=metric.column,
     )
 
 
@@ -264,6 +269,8 @@ async def fetch_all(
                     format=metric.format,
                     thresholds=metric.thresholds,
                     detail=f"取得に失敗: {result}",
+                    row=metric.row,
+                    column=metric.column,
                 )
             )
     return output

@@ -37,10 +37,15 @@ services:
       # サービスの追加も、コンテナを再起動せずに反映される
       # （registry.py が mtime を見る）。
       - ./config:/app/config
+      # 温湿度の履歴（SQLite）。書き手はポータルだけ。
+      - portal-data:/data
     environment:
       SERVICES_FILE: /app/config/services.yml
       SWITCHBOT_CONFIG: /app/config/switchbot.yml
       SWITCHBOT_EXPORTER_URL: http://portal-switchbot-exporter:9110
+      HISTORY_DB: /data/history.db
+      HISTORY_INTERVAL_SECONDS: ${HISTORY_INTERVAL_SECONDS:-120}
+      HISTORY_KEEP_DAYS: ${HISTORY_KEEP_DAYS:-90}
       STATUS_CACHE_SECONDS: ${STATUS_CACHE_SECONDS:-10}
       HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
     networks:
@@ -98,6 +103,7 @@ services:
 volumes:
   caddy-data:
   caddy-config:
+  portal-data:
 
 networks:
   # 既定のネットワーク。portal / caddy / node-exporter はここで互いに解決できる。

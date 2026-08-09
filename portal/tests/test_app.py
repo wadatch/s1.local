@@ -119,11 +119,15 @@ def test_api_status_の形(make_app):
     assert service["health"]["status"] == "up"
     assert service["metrics"][0] == {
         "label": "ロス率",
+        "row": "",
+        "column": "",
         "value": 0.5,
         "display": "50.0 %",
         "level": "crit",
         "detail": "",
     }
+    assert service["layout"] == "list"
+    assert service["matrix"] is None
 
 
 @respx.mock
@@ -196,6 +200,92 @@ def test_設定ミスのあるサービスだけがエラー表示になる(make
     assert response.status_code == 200
     assert "config-errors" in response.text
     assert "無事なやつ" in response.text, "隣のサービスは通常表示のままであること"
+
+
+MATRIX_YAML = """
+    services:
+      - id: sensors
+        name: 温湿度
+        category: home
+        layout: matrix
+        matrix:
+          columns: [屋外, 屋内]
+          rows: [南棟, 北棟]
+        metrics:
+          - label: 南棟 屋外
+            row: 南棟
+            column: 屋外
+            source: prometheus
+            endpoint: http://prom:9090
+            query: 'outside'
+            format: celsius
+          - label: 南棟 屋内
+            row: 南棟
+            column: 屋内
+            source: prometheus
+            endpoint: http://prom:9090
+            query: 'inside'
+            format: celsius
+          - label: センサー台数
+            source: prometheus
+            endpoint: http://prom:9090
+            query: 'count'
+            format: count
+    """
+
+
+@respx.mock
+def test_行列レイアウトが表になる(make_app):
+    def value(number):
+        return httpx.Response(200, json={"status": "success", "data": {
+            "result": [{"metric": {}, "value": [0, number]}]}})
+
+    # クエリごとに固定で返す。順番に依存させると、ページと API を
+    # 続けて叩いたときに枯れてしまう。
+    respx.get("http://prom:9090/api/v1/query", params={"query": "outside"}).mock(
+        return_value=value("31.5"))
+    respx.get("http://prom:9090/api/v1/query", params={"query": "inside"}).mock(
+        return_value=value("26.0"))
+    respx.get("http://prom:9090/api/v1/query", params={"query": "count"}).mock(
+        return_value=value("19"))
+
+    main_module, _ = make_app(MATRIX_YAML)
+    with TestClient(main_module.app) as client:
+        payload = client.get("/api/status").json()
+        body = client.get("/").text
+
+    matrix = payload["services"][0]["matrix"]
+    assert matrix["columns"] == ["屋外", "屋内"]
+    assert [r["label"] for r in matrix["rows"]] == ["南棟", "北棟"]
+
+    south = matrix["rows"][0]["cells"]
+    assert south[0]["display"] == "31.5 °C"
+    assert south[1]["display"] == "26.0 °C"
+
+    # 北棟のマスは設定していないので埋まらない
+    assert matrix["rows"][1]["cells"] == [None, None]
+
+    assert "<table class=\"matrix\">" in body
+    assert "31.5 °C" in body
+    assert "—" in body, "埋まらないマスはダッシュで出ること"
+
+
+@respx.mock
+def test_表に載らない値も消えずに出る(make_app):
+    """設定の書き間違いにも、補助的な値にも気づけるようにするため。"""
+    respx.get("http://prom:9090/api/v1/query").mock(
+        return_value=httpx.Response(200, json={"status": "success", "data": {
+            "result": [{"metric": {}, "value": [0, "19"]}]}})
+    )
+
+    main_module, _ = make_app(MATRIX_YAML)
+    with TestClient(main_module.app) as client:
+        payload = client.get("/api/status").json()
+        body = client.get("/").text
+
+    extras = payload["services"][0]["matrix"]["extras"]
+    assert [e["label"] for e in extras] == ["センサー台数"]
+    assert "センサー台数" in body
 
 
 def test_healthz(make_app):

@@ -12,7 +12,7 @@
 
 <header class="site-header">
   <div class="wrap">
-    <p class="breadcrumb"><a href="/">← s1.local</a></p>
+    <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/graphs">📈 グラフ</a></p>
     <h1>🌡 温湿度センサー</h1>
     {%- set active = sensors | selectattr('enabled') | rejectattr('offline') | list -%}
     {%- set offline = sensors | selectattr('offline') | list -%}

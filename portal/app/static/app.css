@@ -228,6 +228,50 @@ body {
 .metric.level-crit dd { color: var(--crit); }
 .metric.level-unknown dd { color: var(--unknown); }
 
+/* --- 行×列のカード（屋外/屋内 × 棟）------------------------------------- */
+
+table.matrix {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+table.matrix thead th {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  padding: 0 8px 6px;
+  text-align: right;
+}
+
+table.matrix tbody th {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: left;
+  padding: 6px 8px 6px 0;
+  white-space: nowrap;
+}
+
+table.matrix td {
+  padding: 6px 8px;
+  text-align: right;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+table.matrix td.level-ok { background: var(--ok-bg); color: var(--ok); }
+table.matrix td.level-warn { background: var(--warn-bg); color: var(--warn); }
+table.matrix td.level-crit { background: var(--crit-bg); color: var(--crit); }
+table.matrix td.level-unknown { background: var(--unknown-bg); color: var(--unknown); }
+
+.metrics-extra { margin-top: 12px; }
+.metrics-extra dd { font-size: 0.95rem; }
+
 /* --- リンクとフッタ ---------------------------------------------------- */
 
 .open-link {
@@ -423,6 +467,189 @@ table.sensors form { margin: 0; }
   border-radius: 6px;
   padding: 4px 12px;
 }
+
+/* --- グラフページ -------------------------------------------------------- */
+
+.controls {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.control-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  min-width: 3.5em;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.segmented button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.segmented button:last-child { border-right: none; }
+.segmented button:hover { color: var(--text); }
+
+.segmented button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.picker-home {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px 14px 12px;
+  margin: 0;
+}
+
+.picker-home legend {
+  padding: 0 4px;
+  font-size: 0.9rem;
+}
+
+.home-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.picker-sensors {
+  display: grid;
+  gap: 2px;
+}
+
+.sensor-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  padding: 3px 2px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.sensor-check:hover { background: var(--unknown-bg); }
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  flex: none;
+}
+
+.sensor-check-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sensor-check-loc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.charts { display: grid; gap: 16px; }
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px 12px;
+}
+
+.chart-card h2 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* グラフが狭い画面でも潰れないように、中だけ横スクロールさせる。 */
+.chart-scroll { overflow-x: auto; }
+
+.chart {
+  width: 100%;
+  min-width: 520px;
+  height: 260px;
+  display: block;
+}
+
+.chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.chart .axis {
+  fill: var(--text-muted);
+  font-size: 10px;
+  font-family: system-ui, sans-serif;
+}
+
+.legend {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.legend li { display: flex; align-items: center; gap: 6px; }
+
+.legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.empty {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  padding: 24px 4px;
+  text-align: center;
+}
+
+[aria-busy="true"] { opacity: 0.55; }
 
 td.area {
   font-size: 0.82rem;

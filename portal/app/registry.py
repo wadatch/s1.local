@@ -30,6 +30,7 @@ VALID_FORMATS = {
 }
 
 DEFAULT_CATEGORIES = {
+    "home": "家の状態",
     "monitoring": "監視",
     "infra": "サーバ基盤",
     "tools": "自作ツール",
@@ -53,6 +54,9 @@ class Metric:
     labels: dict[str, str] = field(default_factory=dict)
     format: str = "raw"
     thresholds: dict[str, float] = field(default_factory=dict)
+    # layout=matrix のカードで、この値をどのマスに置くか。
+    row: str = ""
+    column: str = ""
 
 
 @dataclass
@@ -64,6 +68,10 @@ class Service:
     category: str = "other"
     health: dict[str, Any] = field(default_factory=lambda: {"type": "always_up"})
     metrics: list[Metric] = field(default_factory=list)
+    # "list"（既定）か "matrix"。matrix なら値を行×列の表に並べる。
+    layout: str = "list"
+    matrix_rows: list[str] = field(default_factory=list)
+    matrix_columns: list[str] = field(default_factory=list)
     # 検証に失敗した理由。空でなければカードをエラー表示にする。
     errors: list[str] = field(default_factory=list)
 
@@ -127,6 +135,8 @@ def _validate_metric(raw: Any, index: int, errors: list[str]) -> Metric | None:
 
     return Metric(
         label=str(label),
+        row=str(raw.get("row") or ""),
+        column=str(raw.get("column") or ""),
         source=source,
         endpoint=raw.get("endpoint"),
         query=raw.get("query"),
@@ -177,9 +187,30 @@ def _validate_service(raw: Any, index: int) -> Service:
         if metric is not None:
             metrics.append(metric)
 
+    layout = str(raw.get("layout") or "list")
+    matrix_rows: list[str] = []
+    matrix_columns: list[str] = []
+    if layout not in ("list", "matrix"):
+        errors.append(f"layout '{layout}' は不正です（list / matrix のいずれか）")
+        layout = "list"
+    elif layout == "matrix":
+        matrix = raw.get("matrix") or {}
+        if not isinstance(matrix, dict):
+            errors.append("matrix はマッピングである必要があります")
+            layout = "list"
+        else:
+            matrix_rows = [str(r) for r in (matrix.get("rows") or [])]
+            matrix_columns = [str(c) for c in (matrix.get("columns") or [])]
+            if not matrix_rows or not matrix_columns:
+                errors.append("layout=matrix には matrix.rows と matrix.columns が必要です")
+                layout = "list"
+
     return Service(
         id=str(service_id),
         name=str(name),
+        layout=layout,
+        matrix_rows=matrix_rows,
+        matrix_columns=matrix_columns,
         description=str(raw.get("description") or ""),
         url=raw.get("url"),
         category=str(raw.get("category") or "other"),

@@ -64,7 +64,45 @@
       </ul>
       {% endif %}
 
-      {% if service.metrics %}
+      {% if service.matrix %}
+      <table class="matrix">
+        <thead>
+          <tr>
+            <td></td>
+            {% for column in service.matrix.columns %}<th>{{ column }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in service.matrix.rows %}
+          <tr>
+            <th>{{ row.label }}</th>
+            {% for cell in row.cells %}
+            {% if cell %}
+            <td class="level-{{ cell.level }}"
+                {% if cell.detail %}title="{{ cell.detail }}"{% endif %}>
+              {{ cell.display }}
+            </td>
+            {% else %}
+            <td class="level-unknown">—</td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if service.matrix.extras %}
+      <dl class="metrics metrics-extra">
+        {% for metric in service.matrix.extras %}
+        <div class="metric level-{{ metric.level }}"
+             {% if metric.detail %}title="{{ metric.detail }}"{% endif %}>
+          <dt>{{ metric.label }}</dt>
+          <dd>{{ metric.display }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% elif service.metrics %}
       <dl class="metrics">
         {% for metric in service.metrics %}
         <div class="metric level-{{ metric.level }}"

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1115">
+<title>温湿度グラフ — s1.local</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/sensors">センサー一覧</a></p>
+    <h1>📈 温湿度グラフ</h1>
+    <p class="tagline">見たいセンサーを選ぶ。ホームごとにまとめて選ぶこともできる。</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+{% if error %}
+  <div class="banner banner-error">
+    <strong>センサー一覧を取得できません。</strong> {{ error }}
+  </div>
+{% endif %}
+
+<form id="controls" class="controls">
+
+  <div class="control-row">
+    <span class="control-label">期間</span>
+    <div class="segmented" id="range-buttons">
+      <button type="button" data-hours="6">6 時間</button>
+      <button type="button" data-hours="24" class="active">24 時間</button>
+      <button type="button" data-hours="168">7 日</button>
+      <button type="button" data-hours="720">30 日</button>
+    </div>
+  </div>
+
+  <div class="control-row">
+    <span class="control-label">並べ方</span>
+    <div class="segmented" id="layout-buttons">
+      <button type="button" data-layout="overlay" class="active">同時（重ねる）</button>
+      <button type="button" data-layout="separate">個別（分ける）</button>
+    </div>
+  </div>
+
+  <div class="control-row">
+    <span class="control-label">表示</span>
+    <div class="segmented" id="metric-buttons">
+      <button type="button" data-metric="both" class="active">温度と湿度</button>
+      <button type="button" data-metric="temperature">温度だけ</button>
+      <button type="button" data-metric="humidity">湿度だけ</button>
+    </div>
+  </div>
+
+</form>
+
+<div class="picker">
+  {% for group in groups %}
+  <fieldset class="picker-home">
+    <legend>
+      <label class="home-toggle">
+        <input type="checkbox" class="home-check" data-home="{{ group.name }}">
+        <strong>{{ group.name }}</strong>
+      </label>
+    </legend>
+    <div class="picker-sensors">
+      {% for sensor in group.sensors %}
+      <label class="sensor-check">
+        <input type="checkbox" class="device-check"
+               value="{{ sensor.device_id }}"
+               data-home="{{ group.name }}"
+               data-name="{{ sensor.name }}">
+        <span class="swatch" data-device="{{ sensor.device_id }}"></span>
+        <span class="sensor-check-name">{{ sensor.name }}</span>
+        <span class="sensor-check-loc">{{ sensor.area }}{% if sensor.room %} / {{ sensor.room }}{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {% endfor %}
+</div>
+
+<div id="charts" class="charts"></div>
+
+<p class="note" id="record-span"></p>
+
+<p class="note">
+  記録は 10 分ごと（SwitchBot の取得間隔と同じ）。90 日分を保存する。
+  <strong>履歴はこの機能を入れた時点から溜まりはじめる</strong>ので、
+  それ以前は表示されない。
+</p>
+
+</main>
+
+<footer class="wrap site-footer">
+  <p>取得を止めているセンサーは記録されないため、ここには出ない。</p>
+</footer>
+
+<script src="/static/graphs.js" defer></script>
+</body>
+</html>

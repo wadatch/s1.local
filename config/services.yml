@@ -21,17 +21,27 @@ services:
   # 代表を入れ替えたいときは device_name を書き換えるだけでよい。
   - id: switchbot
     name: 温湿度センサー
-    description: 南棟・北棟・苗場の温湿度。代表を 1 点ずつ出している。全台は開いて確認する。
+    description: 南棟・北棟・苗場の温湿度。代表を 1 点ずつ出している。全台の一覧とグラフは開いて確認する。
     url: /sensors
     category: home
     health:
       type: http
       url: http://portal-switchbot-exporter:9110/metrics
+    # 値を行×列の表に並べる。縦が棟、横が屋外/屋内。
+    # 屋内はそれぞれのリビング。
+    layout: matrix
+    matrix:
+      columns: [屋外, 屋内（リビング）]
+      rows: [南棟, 北棟, 苗場]
+
     metrics:
-      # 各ホームから 1 点ずつ。ここに書く device_name は
-      # config/switchbot.yml の devices に載っているもの（＝取得中のもの）に限る。
-      # 取得を止めたセンサーを指すと、値が「—」のままになる。
+      # row と column でどのマスに置くかを決める。
+      # ここに書く device_name は config/switchbot.yml の devices に
+      # 載っているもの（＝取得中のもの）に限る。止めたセンサーを指すと
+      # 値が「—」のままになる。
       - label: 南棟 屋外
+        row: 南棟
+        column: 屋外
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
@@ -39,7 +49,9 @@ services:
         format: celsius
         thresholds: {warn: 30, crit: 35}
 
-      - label: 南棟 1階
+      - label: 南棟 リビング
+        row: 南棟
+        column: 屋内（リビング）
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
@@ -47,7 +59,19 @@ services:
         format: celsius
         thresholds: {warn: 28, crit: 31}
 
+      - label: 北棟 屋外
+        row: 北棟
+        column: 屋外
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 北棟屋外温度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
       - label: 北棟 リビング
+        row: 北棟
+        column: 屋内（リビング）
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
@@ -55,7 +79,19 @@ services:
         format: celsius
         thresholds: {warn: 28, crit: 31}
 
+      - label: 苗場 屋外
+        row: 苗場
+        column: 屋外
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: バルコニーの温湿度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
       - label: 苗場 リビング
+        row: 苗場
+        column: 屋内（リビング）
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
