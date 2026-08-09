@@ -5,6 +5,12 @@
 
 const STORAGE_KEY = "s1-portal.graphs.v1";
 
+// 値は 10 分ごとにしか増えないので、これより短くしても得るものはない。
+const REFRESH_INTERVAL_MS = 60000;
+
+// グラフを触っている最中に描き直すと、読もうとしていた値が消える。
+let pointerOnChart = false;
+
 const state = {
   hours: 24,
   layout: "overlay",   // overlay | separate
@@ -172,12 +178,13 @@ async function load() {
 function renderSpan(payload) {
   const el = document.getElementById("record-span");
   if (!el) return;
+  const updated = `（最終更新 ${new Date().toLocaleTimeString("ja-JP")}）`;
   if (!payload.recorded_from) {
-    el.textContent = "まだ履歴がありません。数分待つと溜まりはじめます。";
+    el.textContent = `まだ履歴がありません。数分待つと溜まりはじめます。${updated}`;
     return;
   }
   const from = new Date(payload.recorded_from * 1000);
-  el.textContent = `記録期間: ${from.toLocaleString("ja-JP")} 〜 現在`;
+  el.textContent = `記録期間: ${from.toLocaleString("ja-JP")} 〜 現在 ${updated}`;
 }
 
 // --- 描画 -----------------------------------------------------------------
@@ -393,6 +400,18 @@ function buildChart(series, key, unit) {
     svg.appendChild(marker);
   }
 
+  // SVG は「描いたところ」でしかポインタを拾わない。線と線の間の余白に
+  // カーソルを置いても反応しないので、当たり判定用の透明な板を最前面に敷く。
+  // これが無いと、線の真上を正確になぞらないとツールチップが出ない。
+  svg.appendChild(el("rect", {
+    x: pad.left,
+    y: pad.top,
+    width: Math.max(0, width - pad.left - pad.right),
+    height: Math.max(0, height - pad.top - pad.bottom),
+    fill: "transparent",
+    class: "hit-area",
+  }));
+
   wrap.appendChild(svg);
 
   const tooltip = document.createElement("div");
@@ -485,7 +504,11 @@ function buildChart(series, key, unit) {
 
   svg.addEventListener("pointermove", move);
   svg.addEventListener("pointerdown", move);   // 触った位置でも出す
-  svg.addEventListener("pointerleave", hide);
+  svg.addEventListener("pointerenter", () => { pointerOnChart = true; });
+  svg.addEventListener("pointerleave", () => {
+    pointerOnChart = false;
+    hide();
+  });
 
   return wrap;
 }
@@ -531,3 +554,17 @@ if (!restoreSelection()) {
   }
 }
 load();
+
+// --- 自動更新 -------------------------------------------------------------
+//
+// 描き直すとツールチップが消えるので、グラフを触っている間は見送る。
+// 見ていないタブでも問い合わせない。
+
+setInterval(() => {
+  if (document.hidden || pointerOnChart) return;
+  load();
+}, REFRESH_INTERVAL_MS);
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) load();
+});
