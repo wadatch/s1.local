@@ -24,6 +24,8 @@ def make_app(tmp_path, monkeypatch):
         monkeypatch.setenv("SERVICES_FILE", str(path))
         # 設定を変えたテストごとに読み直させたいのでキャッシュを無効化する
         monkeypatch.setenv("STATUS_CACHE_SECONDS", "0")
+        # 履歴の記録は裏で走り続けるので、ここでは止めておく
+        monkeypatch.setenv("HISTORY_ENABLED", "0")
 
         import importlib
         from app import main as main_module
@@ -286,6 +288,44 @@ def test_表に載らない値も消えずに出る(make_app):
     extras = payload["services"][0]["matrix"]["extras"]
     assert [e["label"] for e in extras] == ["センサー台数"]
     assert "センサー台数" in body
+
+
+@respx.mock
+def test_センサー一覧の行に自動更新用の目印が付く(make_app, monkeypatch):
+    """行の中身だけを差し替えるために、device_id と状態が要る。
+    状態が変わったときだけページを読み込み直す判定にも使う。"""
+    monkeypatch.setenv("SWITCHBOT_EXPORTER_URL", "http://sb:9110")
+    respx.get("http://sb:9110/metrics").mock(
+        return_value=httpx.Response(200, text=(
+            '# TYPE switchbot_temperature_celsius gauge\n'
+            'switchbot_temperature_celsius'
+            '{device_id="A",device_name="リビング",device_type="Meter"} 24.5\n'
+            '# TYPE switchbot_device_known gauge\n'
+            'switchbot_device_known{device_id="A",device_name="リビング"} 1.0\n'
+            'switchbot_device_known{device_id="B",device_name="止めたやつ"} 1.0\n'
+            '# TYPE switchbot_device_excluded gauge\n'
+            'switchbot_device_excluded{device_id="B",device_name="止めたやつ"} 1.0\n'
+        ))
+    )
+
+    main_module, _ = make_app("services: []\n")
+    assert main_module.SWITCHBOT_EXPORTER_URL == "http://sb:9110"
+
+    with TestClient(main_module.app) as client:
+        body = client.get("/sensors").text
+
+    assert 'data-device-id="A"' in body
+    assert 'data-state="active"' in body
+    assert 'data-state="stopped"' in body
+    assert 'cell-temperature' in body, "差し替える先のセルに目印が要る"
+    assert '/static/sensors.js' in body
+
+
+def test_グラフページが自動更新のスクリプトを読む(make_app):
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app) as client:
+        body = client.get("/graphs").text
+    assert "/static/graphs.js" in body
 
 
 def test_healthz(make_app):
