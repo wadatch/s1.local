@@ -1,10 +1,12 @@
-// センサー一覧の自動更新。
+// センサー一覧の更新。
 //
 // ページ全体を読み込み直すと、スクロール位置が飛び、押しかけたトグルの
 // 操作も邪魔になる。行の中身だけを差し替える。
 //
 // ただし行の構造そのものが変わるとき（取得待ち → 値あり、値なしに転落など）は
 // セルの数が変わるので、そのときだけ読み込み直す。
+//
+// 自動更新・更新ボタン・引っ張って更新の面倒は refresh-ui.js が見る。
 
 const REFRESH_INTERVAL_MS = 30000;
 
@@ -62,9 +64,6 @@ function renderUpdatedAt(epochSeconds) {
 }
 
 async function refresh() {
-  // 見ていないタブで問い合わせを続けても意味がない。
-  if (document.hidden) return;
-
   let payload;
   try {
     const response = await fetch("/api/sensors", { cache: "no-store" });
@@ -116,10 +115,4 @@ async function refresh() {
   renderUpdatedAt(payload.updated_at);
 }
 
-refresh();
-setInterval(refresh, REFRESH_INTERVAL_MS);
-
-// 別のタブから戻ってきたら、止まっていたぶんをすぐ埋める。
-document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) refresh();
-});
+setupRefresh({ onRefresh: refresh, intervalMs: REFRESH_INTERVAL_MS });

@@ -18,6 +18,12 @@
       見たいセンサーを選ぶ。ホームごとにまとめて選ぶこともできる。
       グラフの上にカーソルを置くと、その時点の値が出る。
     </p>
+    <p class="updated">
+      <button type="button" class="refresh-button" data-refresh-button
+              title="今すぐ更新する">
+        <span class="refresh-icon">↻</span> 更新
+      </button>
+    </p>
   </div>
 </header>
 
@@ -93,6 +99,7 @@
 <p class="note">
   選んだセンサーと期間はこのブラウザに残るので、次に開いたときも同じ状態で出る。
   グラフは 1 分ごとに自動で更新される（触っている間は邪魔しないよう見送る）。
+  すぐ見たいときは「更新」ボタン、スマホでは画面を下に引っ張っても更新できる。
 </p>
 
 <p class="note">
@@ -107,6 +114,7 @@
   <p>取得を止めているセンサーは記録されないため、ここには出ない。</p>
 </footer>
 
+<script src="/static/refresh-ui.js" defer></script>
 <script src="/static/graphs.js" defer></script>
 </body>
 </html>

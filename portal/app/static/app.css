@@ -88,6 +88,72 @@ body {
 
 /* --- バナー ------------------------------------------------------------ */
 
+/* --- 更新ボタンと引っ張って更新 ------------------------------------------ */
+
+.refresh-button {
+  font: inherit;
+  font-size: 0.75rem;
+  margin-left: 10px;
+  padding: 3px 11px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: baseline;
+}
+
+.refresh-button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.refresh-button:disabled { cursor: default; opacity: 0.6; }
+.refresh-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.refresh-icon { display: inline-block; }
+
+/* 更新中はアイコンを回す。押した手応えを出すため。 */
+.refresh-button[aria-busy="true"] .refresh-icon {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 引っ張って更新の指標。指の動きに合わせて上から降りてくる。 */
+.pull-indicator {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 10;
+  transform: translate(-50%, 0);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  pointer-events: none;
+}
+
+/* display を明示すると hidden 属性が効かなくなる（UA の display:none を
+   上書きしてしまう）。引っ張っていない間ずっと出たままになるので、
+   ここで打ち消しておく。 */
+.pull-indicator[hidden] { display: none; }
+
+.pull-indicator.ready {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pull-arrow { font-size: 0.9rem; }
+
 .banner {
   border: 1px solid var(--border);
   background: var(--surface);
