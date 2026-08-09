@@ -98,6 +98,17 @@ Grafana と Prometheus だけは `reverse_proxy` ではなく `redir`（302）�
 そうすれば `Caddyfile` に `handle_path /foo/* { reverse_proxy foo:8080 }` を
 足すだけで、ポート番号を意識しない本物の統合になる。
 
+### アイコンは取り込んで置く
+
+`portal/app/static/icons/` に [Lucide](https://lucide.dev/) から必要なぶんだけ
+置いている。**CDN から読まない。** 回線が落ちているときにアイコンが出ないのは、
+不調のときにこそ開く画面として本末転倒だから。
+
+増やすときは同じように SVG をここへ置き、`app.css` で `mask-image` として読む。
+`<img>` で読むと色を変えられないので、残量や状態に応じた色分けができない。
+
+選定理由とライセンスは [static/icons/README.md](portal/app/static/icons/README.md)。
+
 ### 障害時にこそ開けること
 
 ポータルは「何かおかしい」と思ったときに最初に開く画面なので、

@@ -48,7 +48,7 @@ class Sensor:
 
     @property
     def battery_level(self) -> str:
-        """電池残量の段階。切れる前に気づけるようにする。"""
+        """電池残量の段階。色を決めるのに使う。切れる前に気づけるように。"""
         if self.battery is None:
             return "none"  # 給電されているデバイス（ハブなど）
         if self.battery <= 10:
@@ -56,6 +56,31 @@ class Sensor:
         if self.battery <= 30:
             return "warn"
         return "ok"
+
+    @property
+    def battery_icon(self) -> str:
+        """電池のアイコン。色より細かく、残りの目減りが形で分かるようにする。
+
+        色は 3 段階（ok / warn / crit）だが、それだと 100% と 40% が
+        同じ見た目になる。減ってきていることに気づけるよう、
+        アイコンは 4 段階に分けている。
+        """
+        if self.battery is None:
+            return "charging"   # 給電されているデバイス
+        if self.battery <= 10:
+            return "warning"
+        if self.battery <= 30:
+            return "low"
+        if self.battery <= 70:
+            return "medium"
+        return "full"
+
+    @property
+    def battery_text(self) -> str:
+        """読み上げと吹き出しに使う文言。アイコンだけでは値が分からないため。"""
+        if self.battery is None:
+            return "給電"
+        return f"電池 {self.battery:.0f}%"
 
     @property
     def freshness(self) -> str:

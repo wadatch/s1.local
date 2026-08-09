@@ -136,6 +136,31 @@ def test_電池の段階(battery, expected):
 
 
 @pytest.mark.parametrize(
+    "battery, expected",
+    [
+        (100, "full"), (71, "full"),
+        (70, "medium"), (31, "medium"),
+        (30, "low"), (11, "low"),
+        (10, "warning"), (0, "warning"),
+        (None, "charging"),
+    ],
+)
+def test_電池のアイコン(battery, expected):
+    """色は 3 段階だが、それだと 100% と 40% が同じ見た目になる。
+    減ってきていることに気づけるよう、アイコンは 4 段階に分ける。"""
+    assert Sensor("x", "x", "x", battery=battery).battery_icon == expected
+
+
+@pytest.mark.parametrize(
+    "battery, expected",
+    [(100, "電池 100%"), (60.4, "電池 60%"), (None, "給電")],
+)
+def test_電池の読み上げ文言(battery, expected):
+    """アイコンだけでは値が分からないので、文言も持つ。"""
+    assert Sensor("x", "x", "x", battery=battery).battery_text == expected
+
+
+@pytest.mark.parametrize(
     "age, expected",
     [(0, "ok"), (1800, "ok"), (1801, "warn"), (3600, "warn"), (3601, "crit"),
      (None, "unknown")],

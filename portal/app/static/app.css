@@ -439,6 +439,66 @@ table.sensors .strong {
 /* 広い画面ではエリア・ルームの列があるので、こちらは出さない。 */
 .sensor-loc { display: none; }
 
+/* 目には出さないが読み上げには渡す。アイコンだけだと値が伝わらないため。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- 電池のアイコン ------------------------------------------------------
+   Lucide のアイコンを mask で読み、色は currentColor から取る。
+   <img> で読むと色を変えられないので、残量に応じた色分けができない。
+   アイコンの実体と選定理由は static/icons/README.md。 */
+
+.battery-icon {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  vertical-align: -5px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.battery-icon[data-battery="full"] {
+  -webkit-mask-image: url("/static/icons/battery-full.svg");
+  mask-image: url("/static/icons/battery-full.svg");
+}
+
+.battery-icon[data-battery="medium"] {
+  -webkit-mask-image: url("/static/icons/battery-medium.svg");
+  mask-image: url("/static/icons/battery-medium.svg");
+}
+
+.battery-icon[data-battery="low"] {
+  -webkit-mask-image: url("/static/icons/battery-low.svg");
+  mask-image: url("/static/icons/battery-low.svg");
+}
+
+.battery-icon[data-battery="warning"] {
+  -webkit-mask-image: url("/static/icons/battery-warning.svg");
+  mask-image: url("/static/icons/battery-warning.svg");
+}
+
+.battery-icon[data-battery="charging"] {
+  -webkit-mask-image: url("/static/icons/battery-charging.svg");
+  mask-image: url("/static/icons/battery-charging.svg");
+}
+
+/* 給電されているデバイスは残量の話ではないので、控えめに出す。 */
+td.cell-battery.level-none { color: var(--text-muted); }
+
 .row-offline { opacity: 0.65; }
 
 .pill {
