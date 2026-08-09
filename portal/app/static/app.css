@@ -523,6 +523,16 @@ td.hum-humidish { color: var(--cool); }
 td.hum-humid { color: var(--cold); }
 td.hum-unknown { color: var(--unknown); }
 
+/* 不快指数は温度と同じ向き（青い＝寒い、赤い＝暑い）。
+   85 以上は「暑くてたまらない」なので、色だけでなく太字でも差をつける。 */
+td.di-cold { color: var(--cold); }
+td.di-cool { color: var(--cool); }
+td.di-comfort { color: var(--ok); }
+td.di-warm { color: var(--warn); }
+td.di-hot { color: var(--crit); }
+td.di-severe { color: var(--crit); font-weight: 700; }
+td.di-unknown { color: var(--unknown); }
+
 /* 色の見本。td 以外でも同じ色が出るようにしておく。 */
 .colour-key .key {
   font-weight: 600;
@@ -536,6 +546,10 @@ td.hum-unknown { color: var(--unknown); }
 .key.hum-dry { color: var(--warn); }
 .key.hum-comfort { color: var(--ok); }
 .key.hum-humid { color: var(--cold); }
+.key.di-cold { color: var(--cold); }
+.key.di-comfort { color: var(--ok); }
+.key.di-warm { color: var(--warn); }
+.key.di-hot { color: var(--crit); }
 .key.bat-ok { color: var(--ok); }
 .key.bat-warn { color: var(--warn); }
 .key.bat-crit { color: var(--crit); }

@@ -232,6 +232,9 @@ async def api_sensors() -> JSONResponse:
                     "room": s.room,
                     "temperature": s.temperature,
                     "humidity": s.humidity,
+                    "discomfort": (
+                        round(s.discomfort, 1) if s.discomfort is not None else None
+                    ),
                     "battery": s.battery,
                     "age_seconds": s.age_seconds,
                     "offline": s.offline,

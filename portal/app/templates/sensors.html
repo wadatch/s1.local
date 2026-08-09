@@ -77,6 +77,7 @@
           <th>センサー</th>
           <th class="num">温度</th>
           <th class="num">湿度</th>
+          <th class="num">不快指数</th>
           <th class="num">電池</th>
           <th class="num">取得</th>
           <th class="num">API取得</th>
@@ -99,17 +100,21 @@
           </td>
 
           {% if row_state == 'stopped' %}
-          <td class="num muted note-cell" colspan="4">取得を止めています</td>
+          <td class="num muted note-cell" colspan="5">取得を止めています</td>
           {% elif row_state == 'pending' %}
-          <td class="num muted note-cell" colspan="4">取得待ち（次の取得で値が入ります）</td>
+          <td class="num muted note-cell" colspan="5">取得待ち（次の取得で値が入ります）</td>
           {% elif row_state == 'offline' %}
-          <td class="num note-cell" colspan="4">
+          <td class="num note-cell" colspan="5">
             <span class="pill pill-crit">値なし</span>
             電池切れか圏外の可能性
           </td>
           {% else %}
           <td class="num strong cell-temperature temp-{{ sensor.temperature_level }}" data-label="温度">{{ format_value(sensor.temperature, 'celsius') }}</td>
           <td class="num cell-humidity hum-{{ sensor.humidity_level }}" data-label="湿度">{{ format_value(sensor.humidity, 'percent100') }}</td>
+          <td class="num cell-discomfort di-{{ sensor.discomfort_level }}" data-label="不快指数"
+              title="{{ sensor.discomfort_text }}">
+            {%- if sensor.discomfort is none %}—{% else %}{{ '%.0f'|format(sensor.discomfort) }}{% endif -%}
+          </td>
           <td class="num cell-battery level-{{ sensor.battery_level }}" data-label="電池">
             <span class="battery-icon" data-battery="{{ sensor.battery_icon }}"
                   title="{{ sensor.battery_text }}"></span>
@@ -173,6 +178,16 @@
   <span class="key bat-ok">十分</span>
   <span class="key bat-warn">少ない</span>
   <span class="key bat-crit">要交換</span>
+</p>
+
+<p class="note">
+  <strong>不快指数</strong>は温度と湿度をまとめた体感の目安
+  （DI = 0.81T + 0.01H(0.99T − 14.3) + 46.3）。
+  同じ 28℃ でも湿度 40% と 80% では体感がまるで違うので、1 つの数字にしてある。
+  <span class="key di-cold">55 未満 寒い</span>
+  <span class="key di-comfort">75 未満 快適</span>
+  <span class="key di-warm">80 未満 やや暑い</span>
+  <span class="key di-hot">80 以上 暑い</span>
 </p>
 
 <p class="note">

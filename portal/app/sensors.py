@@ -47,6 +47,51 @@ class Sensor:
         return self.enabled and not self.offline and self.temperature is None
 
     @property
+    def discomfort(self) -> float | None:
+        """不快指数（THI）。温度と湿度の両方が要る。
+
+            DI = 0.81T + 0.01H(0.99T - 14.3) + 46.3
+
+        温度だけでは体感が分からない。同じ 28℃ でも湿度 40% と 80% では
+        まるで違うので、両方をまとめた 1 つの数字を並べておく。
+        """
+        if self.temperature is None or self.humidity is None:
+            return None
+        t, h = self.temperature, self.humidity
+        return 0.81 * t + 0.01 * h * (0.99 * t - 14.3) + 46.3
+
+    @property
+    def discomfort_level(self) -> str:
+        """不快指数の段階。色は温度と同じ向き（青い＝寒い、赤い＝暑い）。"""
+        value = self.discomfort
+        if value is None:
+            return "unknown"
+        if value < 55:
+            return "cold"
+        if value < 60:
+            return "cool"
+        if value < 75:
+            return "comfort"
+        if value < 80:
+            return "warm"
+        if value < 85:
+            return "hot"
+        return "severe"
+
+    @property
+    def discomfort_text(self) -> str:
+        """段階の言い換え。数字だけでは何を意味するのか分からないため。"""
+        return {
+            "cold": "寒い",
+            "cool": "肌寒い",
+            "comfort": "快適",
+            "warm": "やや暑い",
+            "hot": "暑くて汗が出る",
+            "severe": "暑くてたまらない",
+            "unknown": "—",
+        }[self.discomfort_level]
+
+    @property
     def temperature_level(self) -> str:
         """温度の段階。色を決めるのに使う。
 

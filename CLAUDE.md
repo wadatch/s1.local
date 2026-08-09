@@ -108,7 +108,13 @@ Grafana と Prometheus だけは `reverse_proxy` ではなく `redir`（302）�
 - **黄色いほど乾いている／電池が減っている**
 - **緑は快適・十分**
 
-段階は `Sensor.temperature_level` / `humidity_level` / `battery_level` にある。
+不快指数（THI）も同じ向きで色を付けている。温度だけでは体感が分からず、
+同じ 28℃ でも湿度 40% と 80% ではまるで違うので、両方をまとめた 1 つの数字を
+並べている。温度と湿度の**どちらかが欠けていれば出さない**（片方だけで
+計算すると誤った体感を出すことになる）。
+
+段階は `Sensor.temperature_level` / `humidity_level` / `discomfort_level` /
+`battery_level` にある。
 **`sensors.js` にも同じ段階分けがある**ので、片方だけ直すと自動更新の前後で
 色が変わってしまう。両方直すこと。
 

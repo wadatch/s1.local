@@ -45,6 +45,31 @@ function humidityLevel(h) {
   return "humid";
 }
 
+function discomfort(t, h) {
+  if (t === null || t === undefined || h === null || h === undefined) return null;
+  return 0.81 * t + 0.01 * h * (0.99 * t - 14.3) + 46.3;
+}
+
+function discomfortLevel(di) {
+  if (di === null) return "unknown";
+  if (di < 55) return "cold";
+  if (di < 60) return "cool";
+  if (di < 75) return "comfort";
+  if (di < 80) return "warm";
+  if (di < 85) return "hot";
+  return "severe";
+}
+
+const DISCOMFORT_TEXT = {
+  cold: "寒い",
+  cool: "肌寒い",
+  comfort: "快適",
+  warm: "やや暑い",
+  hot: "暑くて汗が出る",
+  severe: "暑くてたまらない",
+  unknown: "—",
+};
+
 function batteryLevel(battery) {
   if (battery === null || battery === undefined) return "none";
   if (battery <= 10) return "crit";
@@ -163,6 +188,15 @@ async function refresh() {
       hum.textContent =
         sensor.humidity === null ? "—" : `${Math.round(sensor.humidity)} %`;
       hum.className = `num cell-humidity hum-${humidityLevel(sensor.humidity)}`;
+    }
+
+    const di = row.querySelector(".cell-discomfort");
+    if (di) {
+      const value = discomfort(sensor.temperature, sensor.humidity);
+      const level = discomfortLevel(value);
+      di.textContent = value === null ? "—" : String(Math.round(value));
+      di.className = `num cell-discomfort di-${level}`;
+      di.title = DISCOMFORT_TEXT[level];
     }
 
     setBattery(row, sensor.battery);
