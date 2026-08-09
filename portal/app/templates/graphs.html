@@ -14,7 +14,10 @@
   <div class="wrap">
     <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/sensors">センサー一覧</a></p>
     <h1>📈 温湿度グラフ</h1>
-    <p class="tagline">見たいセンサーを選ぶ。ホームごとにまとめて選ぶこともできる。</p>
+    <p class="tagline">
+      見たいセンサーを選ぶ。ホームごとにまとめて選ぶこともできる。
+      グラフの上にカーソルを置くと、その時点の値が出る。
+    </p>
   </div>
 </header>
 
@@ -86,6 +89,10 @@
 <div id="charts" class="charts"></div>
 
 <p class="note" id="record-span"></p>
+
+<p class="note">
+  選んだセンサーと期間はこのブラウザに残るので、次に開いたときも同じ状態で出る。
+</p>
 
 <p class="note">
   記録は 10 分ごと（SwitchBot の取得間隔と同じ）。90 日分を保存する。

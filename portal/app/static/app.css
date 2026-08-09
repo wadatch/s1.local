@@ -601,8 +601,12 @@ table.sensors form { margin: 0; }
   font-weight: 600;
 }
 
-/* グラフが狭い画面でも潰れないように、中だけ横スクロールさせる。 */
-.chart-scroll { overflow-x: auto; }
+/* グラフが狭い画面でも潰れないように、中だけ横スクロールさせる。
+   ツールチップを中に重ねるので position: relative。 */
+.chart-scroll {
+  overflow-x: auto;
+  position: relative;
+}
 
 .chart {
   width: 100%;
@@ -620,6 +624,60 @@ table.sensors form { margin: 0; }
   fill: var(--text-muted);
   font-size: 10px;
   font-family: system-ui, sans-serif;
+}
+
+/* --- ポイントしたところの値 ---------------------------------------------- */
+
+.chart .guide {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.chart .marker {
+  stroke: var(--surface);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.chart-tooltip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 10px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 18%);
+  white-space: nowrap;
+  max-width: 260px;
+}
+
+.tooltip-time {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  margin-bottom: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.tooltip-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooltip-row strong {
+  font-variant-numeric: tabular-nums;
+  margin-left: 8px;
 }
 
 .legend {

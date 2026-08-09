@@ -3,6 +3,8 @@
 // ビルド工程を持たないので、折れ線は SVG を手で組み立てて描く。
 // 宅内から開くだけのページに、外部ライブラリを抱える価値はない。
 
+const STORAGE_KEY = "s1-portal.graphs.v1";
+
 const state = {
   hours: 24,
   layout: "overlay",   // overlay | separate
@@ -24,6 +26,71 @@ function color(deviceId) {
     colorOf.set(deviceId, PALETTE[colorOf.size % PALETTE.length]);
   }
   return colorOf.get(deviceId);
+}
+
+// --- 選んだ内容を覚えておく ------------------------------------------------
+//
+// 毎回選び直すのは面倒なので、前回の選択をブラウザに残す。
+// 保存に失敗しても（プライベートモードなど）グラフ自体は動くこと。
+
+function saveSelection() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      hours: state.hours,
+      layout: state.layout,
+      metric: state.metric,
+      devices: selectedDevices().map((d) => d.id),
+    }));
+  } catch {
+    // 保存できなくても表示には影響しない
+  }
+}
+
+function loadSelection() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    if (!saved || typeof saved !== "object") return null;
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+function applySegmented(id, key, value) {
+  const container = document.getElementById(id);
+  if (!container) return false;
+  const button = container.querySelector(`button[data-${key}="${value}"]`);
+  if (!button) return false;
+  container.querySelectorAll("button").forEach((b) => b.classList.remove("active"));
+  button.classList.add("active");
+  return true;
+}
+
+function restoreSelection() {
+  const saved = loadSelection();
+  if (!saved) return false;
+
+  if (typeof saved.hours === "number" && applySegmented("range-buttons", "hours", saved.hours)) {
+    state.hours = saved.hours;
+  }
+  if (applySegmented("layout-buttons", "layout", saved.layout)) {
+    state.layout = saved.layout;
+  }
+  if (applySegmented("metric-buttons", "metric", saved.metric)) {
+    state.metric = saved.metric;
+  }
+
+  // 保存したセンサーが今も居るとは限らない（取得を止めた・撤去した）。
+  // 居ないものは黙って飛ばす。
+  let restored = 0;
+  for (const id of saved.devices || []) {
+    const box = document.querySelector(`.device-check[value="${CSS.escape(id)}"]`);
+    if (box) {
+      box.checked = true;
+      restored++;
+    }
+  }
+  return restored > 0;
 }
 
 // --- 選択 -----------------------------------------------------------------
@@ -68,6 +135,7 @@ async function load() {
   state.devices = selectedDevices();
   syncHomeChecks();
   paintSwatches();
+  saveSelection();
 
   const charts = document.getElementById("charts");
 
@@ -197,6 +265,22 @@ function formatTime(seconds, spanHours) {
   return date.toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" });
 }
 
+/** 時刻 t にいちばん近い点を返す。点数が多いので二分探索する。 */
+function nearestPoint(points, t) {
+  if (points.length === 0) return null;
+  let low = 0;
+  let high = points.length - 1;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (points[mid].t < t) low = mid + 1;
+    else high = mid;
+  }
+  const after = points[low];
+  const before = points[low - 1];
+  if (!before) return after;
+  return Math.abs(after.t - t) < Math.abs(before.t - t) ? after : before;
+}
+
 function buildChart(series, key, unit) {
   const width = 900;
   const height = 260;
@@ -258,8 +342,10 @@ function buildChart(series, key, unit) {
   }
 
   // 折れ線
+  const usableBySeries = new Map();
   for (const s of series) {
     const usable = s.points.filter((p) => p[key] !== null && p[key] !== undefined);
+    usableBySeries.set(s.device_id, usable);
     if (usable.length === 0) continue;
 
     // 記録が途切れている区間は線をつながない。つなぐと、その間も
@@ -292,7 +378,115 @@ function buildChart(series, key, unit) {
     }));
   }
 
+  // --- ポイントしたところの値を出す ---------------------------------------
+  const guide = el("line", {
+    y1: pad.top, y2: height - pad.bottom, class: "guide", visibility: "hidden",
+  });
+  svg.appendChild(guide);
+
+  const markers = new Map();
+  for (const s of series) {
+    const marker = el("circle", {
+      r: 4, fill: color(s.device_id), class: "marker", visibility: "hidden",
+    });
+    markers.set(s.device_id, marker);
+    svg.appendChild(marker);
+  }
+
   wrap.appendChild(svg);
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "chart-tooltip";
+  tooltip.hidden = true;
+  wrap.appendChild(tooltip);
+
+  function hide() {
+    guide.setAttribute("visibility", "hidden");
+    markers.forEach((m) => m.setAttribute("visibility", "hidden"));
+    tooltip.hidden = true;
+  }
+
+  function move(event) {
+    const rect = svg.getBoundingClientRect();
+    if (rect.width === 0) return;
+
+    // preserveAspectRatio="none" なので、画面上の座標は viewBox に
+    // 横方向へ一次変換すれば戻せる。
+    const viewX = ((event.clientX - rect.left) / rect.width) * width;
+    if (viewX < pad.left || viewX > width - pad.right) {
+      hide();
+      return;
+    }
+
+    const t = minT + ((viewX - pad.left) / (width - pad.left - pad.right)) * (maxT - minT);
+
+    const rows = [];
+    let guideTime = null;
+    for (const s of series) {
+      const point = nearestPoint(usableBySeries.get(s.device_id) || [], t);
+      const marker = markers.get(s.device_id);
+      if (!point) {
+        marker.setAttribute("visibility", "hidden");
+        continue;
+      }
+      marker.setAttribute("cx", x(point.t));
+      marker.setAttribute("cy", y(point[key]));
+      marker.setAttribute("visibility", "visible");
+      rows.push({ name: s.name, deviceId: s.device_id, value: point[key], t: point.t });
+      if (guideTime === null || Math.abs(point.t - t) < Math.abs(guideTime - t)) {
+        guideTime = point.t;
+      }
+    }
+
+    if (rows.length === 0) {
+      hide();
+      return;
+    }
+
+    guide.setAttribute("x1", x(guideTime));
+    guide.setAttribute("x2", x(guideTime));
+    guide.setAttribute("visibility", "visible");
+
+    const when = new Date(guideTime * 1000);
+    tooltip.innerHTML = "";
+    const time = document.createElement("div");
+    time.className = "tooltip-time";
+    time.textContent = when.toLocaleString("ja-JP", {
+      month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+    tooltip.appendChild(time);
+
+    for (const row of rows) {
+      const line = document.createElement("div");
+      line.className = "tooltip-row";
+      const dot = document.createElement("span");
+      dot.className = "legend-dot";
+      dot.style.background = color(row.deviceId);
+      line.appendChild(dot);
+      const name = document.createElement("span");
+      name.className = "tooltip-name";
+      name.textContent = row.name;
+      line.appendChild(name);
+      const value = document.createElement("strong");
+      value.textContent = `${Math.round(row.value * 10) / 10}${unit}`;
+      line.appendChild(value);
+      tooltip.appendChild(line);
+    }
+
+    tooltip.hidden = false;
+
+    // 枠の外にはみ出さないよう、右端では左側に出す。
+    const guideScreenX = (x(guideTime) / width) * rect.width;
+    const offset = 14;
+    const flip = guideScreenX + offset + tooltip.offsetWidth > rect.width;
+    tooltip.style.left = `${Math.max(0, flip ? guideScreenX - tooltip.offsetWidth - offset : guideScreenX + offset)}px`;
+    tooltip.style.top = "8px";
+  }
+
+  svg.addEventListener("pointermove", move);
+  svg.addEventListener("pointerdown", move);   // 触った位置でも出す
+  svg.addEventListener("pointerleave", hide);
+
   return wrap;
 }
 
@@ -325,11 +519,15 @@ document.addEventListener("change", (event) => {
   }
 });
 
-// 最初は最初のホームを選んだ状態で出す。空のページより意図が伝わる。
-const firstHome = document.querySelector(".home-check");
-if (firstHome) {
-  firstHome.checked = true;
-  firstHome.dispatchEvent(new Event("change", { bubbles: true }));
-} else {
-  load();
+// 前回の選択があればそれを再現する。無ければ最初のホームを選んだ状態で出す
+// （空のページより意図が伝わる）。
+if (!restoreSelection()) {
+  const firstHome = document.querySelector(".home-check");
+  if (firstHome) {
+    firstHome.checked = true;
+    document
+      .querySelectorAll(`.device-check[data-home="${CSS.escape(firstHome.dataset.home)}"]`)
+      .forEach((box) => { box.checked = true; });
+  }
 }
+load();
