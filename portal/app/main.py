@@ -18,12 +18,16 @@ from starlette.requests import Request
 
 from . import health as health_mod
 from . import metrics as metrics_mod
+from . import sensors as sensors_mod
 from .registry import RegistryCache, Service
 
 BASE_DIR = Path(__file__).resolve().parent
 SERVICES_FILE = os.environ.get("SERVICES_FILE", "/app/config/services.yml")
 CACHE_SECONDS = float(os.environ.get("STATUS_CACHE_SECONDS", "10"))
 HEALTH_TIMEOUT = float(os.environ.get("HEALTH_TIMEOUT_SECONDS", "3"))
+SWITCHBOT_EXPORTER_URL = os.environ.get(
+    "SWITCHBOT_EXPORTER_URL", "http://portal-switchbot-exporter:9110"
+)
 
 registry_cache = RegistryCache(SERVICES_FILE)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -145,6 +149,44 @@ async def api_status() -> JSONResponse:
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/sensors")
+async def api_sensors() -> JSONResponse:
+    found, error = await sensors_mod.fetch(app.state.client, SWITCHBOT_EXPORTER_URL)
+    return JSONResponse(
+        {
+            "error": error or None,
+            "sensors": [
+                {
+                    "device_id": s.device_id,
+                    "name": s.name,
+                    "device_type": s.device_type,
+                    "temperature": s.temperature,
+                    "humidity": s.humidity,
+                    "battery": s.battery,
+                    "age_seconds": s.age_seconds,
+                    "offline": s.offline,
+                }
+                for s in found
+            ],
+            "updated_at": time.time(),
+        }
+    )
+
+
+@app.get("/sensors", response_class=HTMLResponse)
+async def sensors_page(request: Request) -> HTMLResponse:
+    found, error = await sensors_mod.fetch(app.state.client, SWITCHBOT_EXPORTER_URL)
+    return templates.TemplateResponse(
+        request=request,
+        name="sensors.html",
+        context={
+            "sensors": found,
+            "error": error,
+            "format_value": metrics_mod.format_value,
+        },
+    )
 
 
 @app.get("/", response_class=HTMLResponse)

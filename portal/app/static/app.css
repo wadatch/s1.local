@@ -258,3 +258,95 @@ code {
 
 /* 更新時に一瞬だけ薄くして、値が変わったことが分かるようにする。 */
 .refreshing .metrics { opacity: 0.55; transition: opacity 120ms; }
+
+/* --- センサー一覧ページ -------------------------------------------------- */
+
+.breadcrumb {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+}
+
+.breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover { color: var(--accent); }
+
+/* 横に長い表はページ全体ではなく表の中だけをスクロールさせる。 */
+.table-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+table.sensors {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+table.sensors th,
+table.sensors td {
+  padding: 9px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+table.sensors thead th {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+
+table.sensors tbody tr:last-child td { border-bottom: none; }
+
+table.sensors .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.sensors .strong {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.sensor-name { display: block; }
+
+.sensor-type {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.row-offline { opacity: 0.65; }
+
+.pill {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.pill-crit { color: var(--crit); background: var(--crit-bg); }
+
+td.level-ok { color: var(--text); }
+td.level-warn { color: var(--warn); font-weight: 600; }
+td.level-crit { color: var(--crit); font-weight: 600; }
+td.level-none,
+td.level-unknown { color: var(--text-muted); }
+
+.note {
+  margin: 16px 0 32px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}

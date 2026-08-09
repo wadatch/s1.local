@@ -53,6 +53,30 @@ services:
       retries: 3
       start_period: 15s
 
+  switchbot-exporter:
+    build: ./switchbot-exporter
+    image: s1-portal/switchbot-exporter:local
+    container_name: portal-switchbot-exporter
+    restart: unless-stopped
+    volumes:
+      # 除外リスト。毎周期で読み直すので、編集しても再起動は要らない。
+      - ./config:/app/config:ro
+    environment:
+      SWITCHBOT_TOKEN: ${SWITCHBOT_TOKEN:-}
+      SWITCHBOT_SECRET: ${SWITCHBOT_SECRET:-}
+      # SwitchBot API は 1 日 10,000 回まで。この間隔がそのまま消費量を決める。
+      # 消費回数 ≒ (センサー台数 + 1) × 86400 / この値。詳細は .env.example。
+      SWITCHBOT_POLL_SECONDS: ${SWITCHBOT_POLL_SECONDS:-600}
+    expose:
+      - "9110"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9110/metrics', timeout=3).status == 200 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: portal-node-exporter

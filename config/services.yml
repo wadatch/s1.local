@@ -9,11 +9,72 @@
 # ===========================================================================
 
 categories:
+  home: 家の状態
   monitoring: 監視
   infra: サーバ基盤
   tools: 自作ツール
 
 services:
+  # -------------------------------------------------------------------------
+  # 温湿度センサーは 32 台ある。全部をここに並べるとトップページの
+  # 一覧性が失われるので、代表的な数点だけを出して /sensors へ誘導する。
+  # 代表を入れ替えたいときは device_name を書き換えるだけでよい。
+  - id: switchbot
+    name: 温湿度センサー
+    description: 家じゅうの温湿度。代表的な数点だけを出している。全 30 台ぶんは開いて確認する。
+    url: /sensors
+    category: home
+    health:
+      type: http
+      url: http://portal-switchbot-exporter:9110/metrics
+    metrics:
+      - label: 外の温度計
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 外の温度計}
+        format: celsius
+        thresholds: {warn: 30, crit: 35}
+
+      - label: リビング
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: リビングの温度計}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: ダイニング
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: ダイニングの温度計}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 書斎
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 書斎の温度計}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 取得できているセンサー
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_sensor_count
+        format: count
+
+      # 電池切れや圏外で値を返さなくなったセンサーの数。
+      # config/switchbot.yml で除外したものはここに含まれない。
+      - label: 値なしセンサー
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_offline_device_count
+        format: count
+        thresholds: {warn: 1, crit: 3}
+
   # -------------------------------------------------------------------------
   - id: network-analyzer
     name: ネットワーク監視

@@ -16,10 +16,11 @@ from typing import Any
 
 import yaml
 
-VALID_SOURCES = {"prometheus", "node_exporter", "none"}
+VALID_SOURCES = {"prometheus", "prometheus_text", "node_exporter", "none"}
 VALID_HEALTH_TYPES = {"http", "tcp", "always_up"}
 VALID_FORMATS = {
     "percent",
+    "percent100",
     "seconds_ms",
     "bytes",
     "count",
@@ -47,6 +48,9 @@ class Metric:
     endpoint: str | None = None
     query: str | None = None
     field_name: str | None = None
+    # source=prometheus_text 用。metric 名と、系列を絞り込むラベル。
+    metric_name: str | None = None
+    labels: dict[str, str] = field(default_factory=dict)
     format: str = "raw"
     thresholds: dict[str, float] = field(default_factory=dict)
 
@@ -102,9 +106,19 @@ def _validate_metric(raw: Any, index: int, errors: list[str]) -> Metric | None:
     if source == "node_exporter" and not raw.get("field"):
         errors.append(f"metrics[{index}] ({label}): source=node_exporter には field が必要です")
         return None
+    if source == "prometheus_text" and not raw.get("metric"):
+        errors.append(
+            f"metrics[{index}] ({label}): source=prometheus_text には metric が必要です"
+        )
+        return None
     if source != "none" and not raw.get("endpoint"):
         errors.append(f"metrics[{index}] ({label}): endpoint が必要です")
         return None
+
+    labels = raw.get("labels") or {}
+    if not isinstance(labels, dict):
+        errors.append(f"metrics[{index}] ({label}): labels はマッピングである必要があります")
+        labels = {}
 
     thresholds = raw.get("thresholds") or {}
     if not isinstance(thresholds, dict):
@@ -117,6 +131,8 @@ def _validate_metric(raw: Any, index: int, errors: list[str]) -> Metric | None:
         endpoint=raw.get("endpoint"),
         query=raw.get("query"),
         field_name=raw.get("field"),
+        metric_name=raw.get("metric"),
+        labels={str(k): str(v) for k, v in labels.items()},
         format=fmt,
         thresholds={k: float(v) for k, v in thresholds.items() if k in ("warn", "crit")},
     )

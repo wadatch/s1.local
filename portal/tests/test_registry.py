@@ -76,6 +76,41 @@ def test_node_exporter_のフィールドを読める():
     assert registry.services[0].metrics[0].field_name == "cpu_usage_ratio"
 
 
+def test_prometheus_text_のラベルを読める():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            metrics:
+              - label: リビング 温度
+                source: prometheus_text
+                endpoint: http://switchbot-exporter:9110
+                metric: switchbot_temperature_celsius
+                labels: {device_name: リビング}
+                format: celsius
+        """
+    )
+    metric = registry.services[0].metrics[0]
+    assert metric.metric_name == "switchbot_temperature_celsius"
+    assert metric.labels == {"device_name": "リビング"}
+
+
+def test_prometheus_text_に_metric_が無いとエラー():
+    registry = parse_yaml(
+        """
+        services:
+          - id: sensors
+            name: 温湿度
+            metrics:
+              - label: 温度
+                source: prometheus_text
+                endpoint: http://sb:9110
+        """
+    )
+    assert any("metric が必要" in e for e in registry.services[0].errors)
+
+
 def test_カテゴリの既定値を上書きできる():
     registry = parse_yaml(
         """

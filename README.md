@@ -19,6 +19,7 @@
 
 | サービス | 内容 |
 |---|---|
+| 温湿度センサー | SwitchBot 27 台。代表的な数点をトップに、全台は `/sensors` で表に |
 | ネットワーク監視 | 区間別のロス率・ゲートウェイ RTT・発報中アラート（→ Grafana） |
 | Prometheus | 収集中の系列数・失敗中のターゲット（→ Prometheus） |
 | s1 サーバ | CPU / メモリ / ディスク / 温度 / 連続稼働 |
@@ -46,6 +47,7 @@ make check    # 設定の検証
 make test     # テスト
 make deploy   # s1.local へ配備して起動
 make logs     # ログ
+make switchbot-devices   # SwitchBot の登録デバイスと現在値を一覧表示
 ```
 
 ローカルに Python は要らない。すべて Docker 上で動く。

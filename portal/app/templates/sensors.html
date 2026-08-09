@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1115">
+<title>温湿度センサー — s1.local</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <p class="breadcrumb"><a href="/">← s1.local</a></p>
+    <h1>🌡 温湿度センサー</h1>
+    <p class="tagline">
+      {{ sensors | rejectattr('offline') | list | length }} 台が値を返しています
+      {%- set offline = sensors | selectattr('offline') | list -%}
+      {%- if offline %}／{{ offline | length }} 台が値なし{% endif %}
+    </p>
+  </div>
+</header>
+
+<main class="wrap">
+
+{% if error %}
+  <div class="banner banner-error">
+    <strong>センサーの値を取得できません。</strong>
+    <span>{{ error }}</span>
+    <p>switchbot-exporter が動いているか、認証情報が正しいかを確認してください。</p>
+  </div>
+{% elif not sensors %}
+  <div class="banner">
+    センサーが 1 台も見つかりません。<code>make switchbot-devices</code> で確認してください。
+  </div>
+{% endif %}
+
+{% if sensors %}
+<div class="table-scroll">
+  <table class="sensors">
+    <thead>
+      <tr>
+        <th>センサー</th>
+        <th class="num">温度</th>
+        <th class="num">湿度</th>
+        <th class="num">電池</th>
+        <th class="num">取得</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for sensor in sensors %}
+      <tr {% if sensor.offline %}class="row-offline"{% endif %}>
+        <td>
+          <span class="sensor-name">{{ sensor.name }}</span>
+          <span class="sensor-type">{{ sensor.device_type }}</span>
+        </td>
+
+        {% if sensor.offline %}
+        <td class="num" colspan="4">
+          <span class="pill pill-crit">値なし</span>
+          電池切れか圏外の可能性
+        </td>
+        {% else %}
+        <td class="num strong">{{ format_value(sensor.temperature, 'celsius') }}</td>
+        <td class="num">{{ format_value(sensor.humidity, 'percent100') }}</td>
+        <td class="num level-{{ sensor.battery_level }}">
+          {% if sensor.battery is none %}給電{% else %}{{ format_value(sensor.battery, 'percent100') }}{% endif %}
+        </td>
+        <td class="num level-{{ sensor.freshness }}">
+          {{ format_value(sensor.age_seconds, 'duration') }}前
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="note">
+  暑い順に並べている。「取得」は値を取り込んでからの経過時間で、
+  これが伸びていれば表示中の温度はもう現在の値ではない。
+  取得間隔は 10 分（SwitchBot API の 1 日 10,000 回の上限に収めるため）。
+</p>
+{% endif %}
+
+</main>
+
+<footer class="wrap site-footer">
+  <p>
+    センサーの増減はそのまま反映される。取得対象から外すには
+    <code>config/switchbot.yml</code> に追記する。
+  </p>
+</footer>
+
+</body>
+</html>
