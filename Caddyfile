@@ -1,0 +1,42 @@
+# s1.local ホームポータルの入口。
+#
+# 宅内 LAN と Tailscale からの利用が前提なので HTTPS は張らない。
+# `:80` と書くことで Caddy の自動 HTTPS を無効にしている。
+
+:80 {
+	log {
+		output stderr
+		format console
+	}
+
+	# --- 既存サービスへの入口 -------------------------------------------
+	#
+	# reverse_proxy ではなく redir にしてある。これは意図した選択。
+	#
+	# Grafana / Prometheus をサブパスで真にプロキシするには、それぞれ
+	# GF_SERVER_ROOT_URL + GF_SERVER_SERVE_FROM_SUB_PATH、
+	# --web.external-url + --web.route-prefix の設定が要る。これらは
+	# 別リポジトリ network-analyzer 側の変更になるうえ、root_url を変えると
+	# 既存の s1.local:3000 直アクセスが壊れる（アセットのパスが
+	# サブパス前提になるため）。動いている監視基盤を壊す価値はない。
+	#
+	# 利用者から見た「s1.local/ から全部辿れる」体験は redir でも同じ。
+	# 将来 network-analyzer 側を触る判断をしたら、この 2 行を
+	# reverse_proxy に変えるだけで移行できる。
+	#
+	# これから追加する新サービスは最初からサブパス配信で設計し、
+	# 本物の reverse_proxy で繋ぐこと。
+	# handle_path が /grafana を剥がすので、{uri} は残りのパスになる。
+	# これで /grafana/d/xxx のような深いリンクもそのまま飛べる。
+	handle_path /grafana/* {
+		redir * http://{$PORTAL_HOST}:3000{uri}
+	}
+	handle_path /prometheus/* {
+		redir * http://{$PORTAL_HOST}:9090{uri}
+	}
+	redir /grafana http://{$PORTAL_HOST}:3000
+	redir /prometheus http://{$PORTAL_HOST}:9090
+
+	# --- ポータル本体 ---------------------------------------------------
+	reverse_proxy portal-app:8000
+}

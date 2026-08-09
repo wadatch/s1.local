@@ -1,0 +1,81 @@
+---
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    container_name: portal-caddy
+    restart: unless-stopped
+    depends_on:
+      - portal
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      # Caddyfile 内のリダイレクト先に使う。ブラウザから見えるホスト名なので
+      # コンテナ名ではなく LAN 上の名前を入れる。
+      PORTAL_HOST: ${PORTAL_HOST:-s1.local}
+    ports:
+      - "${BIND_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  portal:
+    build: ./portal
+    image: s1-portal/portal:local
+    container_name: portal-app
+    restart: unless-stopped
+    volumes:
+      # 設定を read-only でマウントする。サービスを追加するとき
+      # コンテナを再起動せずに反映させるため（registry.py が mtime を見る）。
+      - ./config:/app/config:ro
+    environment:
+      SERVICES_FILE: /app/config/services.yml
+      STATUS_CACHE_SECONDS: ${STATUS_CACHE_SECONDS:-10}
+      HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
+    networks:
+      # 監視対象へコンテナ名で到達するため、両方のネットワークに属する。
+      - default
+      - network-analyzer
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: portal-node-exporter
+    restart: unless-stopped
+    # ホスト自身の状態を測るので、ホストの PID 名前空間とルートを見せる。
+    pid: host
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|host/(dev|proc|sys|run|var/lib/docker/.+))($$|/)
+    expose:
+      - "9100"
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  # 既定のネットワーク。portal / caddy / node-exporter はここで互いに解決できる。
+  default:
+    name: s1-portal
+
+  # network-analyzer が作ったネットワークに相乗りする。
+  # これにより na-prometheus / na-grafana へコンテナ名で到達でき、
+  # network-analyzer 側の設定を一切変更せずに済む。
+  network-analyzer:
+    name: network-analyzer_default
+    external: true

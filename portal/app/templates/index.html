@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1115">
+<title>s1.local — 我が家の管理ポータル</title>
+<link rel="stylesheet" href="/static/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <h1>🏠 s1.local</h1>
+    <p class="tagline">我が家のサーバで動いているもの</p>
+    <p class="updated">最終更新 <time id="updated-at">—</time></p>
+  </div>
+</header>
+
+<main class="wrap">
+
+{% if status.error %}
+  <div class="banner banner-error">
+    <strong>設定ファイルを読み込めません。</strong>
+    <span>{{ status.error }}</span>
+    <p>config/services.yml を確認してください。</p>
+  </div>
+{% elif not status.services %}
+  <div class="banner">
+    サービスがまだ登録されていません。<code>config/services.yml</code> に追記してください。
+  </div>
+{% endif %}
+
+{% for category_label, services in by_category %}
+<section class="category">
+  <h2>{{ category_label }}</h2>
+  <div class="cards">
+    {% for service in services %}
+    <article class="card" data-service-id="{{ service.id }}">
+
+      <div class="card-head">
+        <span class="dot dot-{{ service.health.status }}"
+              title="{{ service.health.detail }}"></span>
+        <h3>
+          {% if service.url %}
+            <a href="{{ service.url }}">{{ service.name }}</a>
+          {% else %}
+            {{ service.name }}
+          {% endif %}
+        </h3>
+        <span class="status-text status-{{ service.health.status }}">
+          {{ {'up': 'UP', 'down': 'DOWN', 'unknown': '不明'}[service.health.status] }}
+        </span>
+      </div>
+
+      {% if service.description %}
+      <p class="description">{{ service.description }}</p>
+      {% endif %}
+
+      {% if service.errors %}
+      <ul class="config-errors">
+        {% for error in service.errors %}<li>{{ error }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if service.metrics %}
+      <dl class="metrics">
+        {% for metric in service.metrics %}
+        <div class="metric level-{{ metric.level }}"
+             {% if metric.detail %}title="{{ metric.detail }}"{% endif %}>
+          <dt>{{ metric.label }}</dt>
+          <dd>{{ metric.display }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+
+      {% if service.url %}
+      <a class="open-link" href="{{ service.url }}">開く →</a>
+      {% endif %}
+
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+
+</main>
+
+<footer class="wrap site-footer">
+  <p>
+    サービスを追加するには <code>config/services.yml</code> にエントリを 1 つ足す。
+    コードの変更もコンテナの再起動も不要。
+  </p>
+</footer>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>
