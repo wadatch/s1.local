@@ -1,9 +1,16 @@
 # s1.local ホームポータルの入口。
 #
-# 宅内 LAN と Tailscale からの利用が前提なので HTTPS は張らない。
-# `:80` と書くことで Caddy の自動 HTTPS を無効にしている。
+# 2 つの入口を持つ:
+#   http://s1.local/                    宅内 LAN から手軽に（HTTP）
+#   https://s1.tail981a3e.ts.net/       本物の証明書つき（Tailscale 経由、宅内外とも）
+#
+# `.local` は mDNS 用の予約 TLD で所有を証明できないため、公的 CA は
+# s1.local に証明書を発行しない。一方 Tailscale は MagicDNS 名に対して
+# 本物の Let's Encrypt 証明書を出せるので、そちらを HTTPS の入口にしている。
+# 端末側に証明書をインストールする作業は要らない。
 
-:80 {
+# 中身は 2 つの入口で共通。ここに一度だけ書いて import する。
+(portal) {
 	log {
 		output stderr
 		format console
@@ -21,22 +28,49 @@
 	# サブパス前提になるため）。動いている監視基盤を壊す価値はない。
 	#
 	# 利用者から見た「s1.local/ から全部辿れる」体験は redir でも同じ。
-	# 将来 network-analyzer 側を触る判断をしたら、この 2 行を
+	# 将来 network-analyzer 側を触る判断をしたら、この行を
 	# reverse_proxy に変えるだけで移行できる。
 	#
 	# これから追加する新サービスは最初からサブパス配信で設計し、
 	# 本物の reverse_proxy で繋ぐこと。
-	# handle_path が /grafana を剥がすので、{uri} は残りのパスになる。
-	# これで /grafana/d/xxx のような深いリンクもそのまま飛べる。
+	#
+	# 飛び先を {host} にしているので、s1.local で来たら s1.local:3000 へ、
+	# ts.net 名で来たら ts.net:3000 へと、入ってきた経路のまま飛ぶ。
+	#
+	# 注意: この 1 区間だけは HTTPS にならない（Grafana 自身が平文 HTTP の
+	# ため）。ただし ts.net 経由なら Tailscale が WireGuard で暗号化するので
+	# 通信路が平文になるわけではない。
 	handle_path /grafana/* {
-		redir * http://{$PORTAL_HOST}:3000{uri}
+		redir * http://{host}:3000{uri}
 	}
 	handle_path /prometheus/* {
-		redir * http://{$PORTAL_HOST}:9090{uri}
+		redir * http://{host}:9090{uri}
 	}
-	redir /grafana http://{$PORTAL_HOST}:3000
-	redir /prometheus http://{$PORTAL_HOST}:9090
+	redir /grafana http://{host}:3000
+	redir /prometheus http://{host}:9090
 
 	# --- ポータル本体 ---------------------------------------------------
 	reverse_proxy portal-app:8000
+}
+
+# --- HTTP の入口（宅内 LAN 用）--------------------------------------------
+# s1.local / IP 直打ちなど、下の名前に当てはまらないものはすべてここ。
+:80 {
+	# ts.net 名に HTTP で来たときだけ HTTPS に上げる。
+	# その名前には本物の証明書があるので、平文で受ける理由がない。
+	# s1.local はここに当てはまらず、従来どおり HTTP で開ける。
+	@tailscale host {$TS_HOSTNAME}
+	redir @tailscale https://{host}{uri} permanent
+
+	import portal
+}
+
+# --- HTTPS の入口（Tailscale）---------------------------------------------
+# 証明書は tailscaled から受け取る。ACME は使わない。
+# そのため /var/run/tailscale/tailscaled.sock をコンテナに渡している。
+https://{$TS_HOSTNAME} {
+	tls {
+		get_certificate tailscale
+	}
+	import portal
 }
