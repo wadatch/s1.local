@@ -92,29 +92,33 @@
           <td>
             <span class="sensor-name">{{ sensor.name }}</span>
             <span class="sensor-type">{{ sensor.device_type }}</span>
+            {# 狭い画面ではエリア・ルームの列を畳むので、ここに出す #}
+            <span class="sensor-loc">
+              {{ sensor.area or '—' }}{% if sensor.room %} / {{ sensor.room }}{% endif %}
+            </span>
           </td>
 
           {% if row_state == 'stopped' %}
-          <td class="num muted" colspan="4">取得を止めています</td>
+          <td class="num muted note-cell" colspan="4">取得を止めています</td>
           {% elif row_state == 'pending' %}
-          <td class="num muted" colspan="4">取得待ち（次の取得で値が入ります）</td>
+          <td class="num muted note-cell" colspan="4">取得待ち（次の取得で値が入ります）</td>
           {% elif row_state == 'offline' %}
-          <td class="num" colspan="4">
+          <td class="num note-cell" colspan="4">
             <span class="pill pill-crit">値なし</span>
             電池切れか圏外の可能性
           </td>
           {% else %}
-          <td class="num strong cell-temperature">{{ format_value(sensor.temperature, 'celsius') }}</td>
-          <td class="num cell-humidity">{{ format_value(sensor.humidity, 'percent100') }}</td>
-          <td class="num cell-battery level-{{ sensor.battery_level }}">
+          <td class="num strong cell-temperature" data-label="温度">{{ format_value(sensor.temperature, 'celsius') }}</td>
+          <td class="num cell-humidity" data-label="湿度">{{ format_value(sensor.humidity, 'percent100') }}</td>
+          <td class="num cell-battery level-{{ sensor.battery_level }}" data-label="電池">
             {% if sensor.battery is none %}給電{% else %}{{ format_value(sensor.battery, 'percent100') }}{% endif %}
           </td>
-          <td class="num cell-age level-{{ sensor.freshness }}">
+          <td class="num cell-age level-{{ sensor.freshness }}" data-label="取得">
             {{ format_value(sensor.age_seconds, 'duration') }}前
           </td>
           {% endif %}
 
-          <td class="num">
+          <td class="num toggle-cell">
             <form method="post" action="/sensors/toggle">
               <input type="hidden" name="device_id" value="{{ sensor.device_id }}">
               <input type="hidden" name="device_name" value="{{ sensor.name }}">

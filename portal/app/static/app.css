@@ -436,6 +436,9 @@ table.sensors .strong {
   color: var(--text-muted);
 }
 
+/* 広い画面ではエリア・ルームの列があるので、こちらは出さない。 */
+.sensor-loc { display: none; }
+
 .row-offline { opacity: 0.65; }
 
 .pill {
@@ -454,6 +457,77 @@ td.level-warn { color: var(--warn); font-weight: 600; }
 td.level-crit { color: var(--crit); font-weight: 600; }
 td.level-none,
 td.level-unknown { color: var(--text-muted); }
+
+/* --- 狭い画面のセンサー一覧 ----------------------------------------------
+   8 列の表は 390px の画面に収まらず、温度から先が画面の外に出てしまう。
+   値を見るのがこのページの目的なので、狭いときは表を畳んで
+   1 センサー 1 ブロックに積み替える。横スクロールは無くなる。 */
+
+@media (max-width: 640px) {
+  table.sensors { display: block; }
+  table.sensors thead { display: none; }
+  table.sensors tbody { display: block; }
+
+  table.sensors tr {
+    display: block;
+    position: relative;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  table.sensors tbody tr:last-child { border-bottom: none; }
+
+  table.sensors td {
+    display: inline-block;
+    border-bottom: none;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+  }
+
+  /* エリアとルームは名前の下にまとめて出すので、列としては畳む */
+  table.sensors td.area,
+  table.sensors td.room { display: none; }
+
+  .sensor-loc {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+
+  /* 名前は 1 行使い、トグルのぶんだけ右を空ける */
+  table.sensors tr > td:nth-of-type(3) {
+    display: block;
+    padding-right: 64px;
+    margin-bottom: 7px;
+  }
+
+  /* 値は横に並べる。見出しは data-label から出す */
+  table.sensors td[data-label] {
+    margin-right: 14px;
+    font-size: 0.95rem;
+  }
+
+  table.sensors td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  table.sensors td.strong { font-size: 1.1rem; }
+
+  table.sensors td.note-cell { display: block; font-size: 0.85rem; }
+
+  /* トグルは右上に固定して、指で押しやすい位置にそろえる */
+  table.sensors td.toggle-cell {
+    position: absolute;
+    top: 11px;
+    right: 14px;
+  }
+}
 
 .note {
   margin: 16px 0 12px;
