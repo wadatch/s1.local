@@ -1,0 +1,260 @@
+/* s1.local ホームポータル
+   ビルド工程を持たない素の CSS。宅内から気軽に開く前提なので軽さを優先する。 */
+
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --border: #e2e5ea;
+  --text: #1a1d23;
+  --text-muted: #626b7a;
+  --accent: #2b6cb0;
+
+  --ok: #2f855a;
+  --ok-bg: #e6f4ec;
+  --warn: #b7791f;
+  --warn-bg: #fdf3e0;
+  --crit: #c53030;
+  --crit-bg: #fceaea;
+  --unknown: #8a919e;
+  --unknown-bg: #eef0f3;
+
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115;
+    --surface: #191d24;
+    --border: #2a303a;
+    --text: #e8eaed;
+    --text-muted: #98a1b0;
+    --accent: #63a4e0;
+
+    --ok: #68d391;
+    --ok-bg: #1b2f24;
+    --warn: #f6c667;
+    --warn-bg: #332914;
+    --crit: #fc8181;
+    --crit-bg: #3a1d1d;
+    --unknown: #7a8494;
+    --unknown-bg: #22272f;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* --- ヘッダ ------------------------------------------------------------ */
+
+.site-header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding: 28px 0 22px;
+  margin-bottom: 32px;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.01em;
+}
+
+.tagline {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.updated {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- バナー ------------------------------------------------------------ */
+
+.banner {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 28px;
+}
+
+.banner-error {
+  border-color: var(--crit);
+  background: var(--crit-bg);
+}
+
+.banner p { margin: 6px 0 0; font-size: 0.88rem; color: var(--text-muted); }
+
+/* --- カテゴリとカード -------------------------------------------------- */
+
+.category { margin-bottom: 40px; }
+
+.category h2 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+
+.cards {
+  display: grid;
+  /* 画面幅に応じて自然に段組みが変わる。スマホでは 1 カラムになる。 */
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.card-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-head h3 a { color: inherit; text-decoration: none; }
+.card-head h3 a:hover { color: var(--accent); text-decoration: underline; }
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--unknown);
+}
+
+.dot-up { background: var(--ok); }
+.dot-down { background: var(--crit); }
+.dot-unknown { background: var(--unknown); }
+
+.status-text {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  flex: none;
+}
+
+.status-up { color: var(--ok); background: var(--ok-bg); }
+.status-down { color: var(--crit); background: var(--crit-bg); }
+.status-unknown { color: var(--unknown); background: var(--unknown-bg); }
+
+.description {
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.config-errors {
+  margin: 12px 0 0;
+  padding: 10px 12px 10px 28px;
+  background: var(--crit-bg);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  color: var(--crit);
+}
+
+/* --- 数値 -------------------------------------------------------------- */
+
+.metrics {
+  margin: 16px 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  background: var(--unknown-bg);
+  border-radius: 7px;
+  padding: 9px 11px;
+  min-width: 0;
+}
+
+.metric dt {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metric dd {
+  margin: 1px 0 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.metric.level-ok { background: var(--ok-bg); }
+.metric.level-ok dd { color: var(--ok); }
+.metric.level-warn { background: var(--warn-bg); }
+.metric.level-warn dd { color: var(--warn); }
+.metric.level-crit { background: var(--crit-bg); }
+.metric.level-crit dd { color: var(--crit); }
+.metric.level-unknown dd { color: var(--unknown); }
+
+/* --- リンクとフッタ ---------------------------------------------------- */
+
+.open-link {
+  margin-top: 14px;
+  align-self: flex-start;
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.open-link:hover { text-decoration: underline; }
+
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+  padding-bottom: 40px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: var(--unknown-bg);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+/* 更新時に一瞬だけ薄くして、値が変わったことが分かるようにする。 */
+.refreshing .metrics { opacity: 0.55; transition: opacity 120ms; }

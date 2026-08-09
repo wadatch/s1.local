@@ -1,0 +1,117 @@
+# ===========================================================================
+# s1 で動いているサービスの登録簿。
+#
+# ★ サービスを追加するときは、このファイルにエントリを 1 つ足すだけでよい。
+#   Python コードを触る必要はなく、コンテナの再起動も不要
+#   （ファイルの更新時刻を見て自動で読み直す）。
+#
+# 詳しい書き方は CLAUDE.md を参照。
+# ===========================================================================
+
+categories:
+  monitoring: 監視
+  infra: サーバ基盤
+  tools: 自作ツール
+
+services:
+  # -------------------------------------------------------------------------
+  - id: network-analyzer
+    name: ネットワーク監視
+    description: 宅内 〜 ルーター 〜 ISP 〜 インターネットの区間別に遅延とロスを常時計測している。どの区間が壊れているかの切り分けに使う。
+    url: /grafana
+    category: monitoring
+    health:
+      type: http
+      # コンテナ名で到達する（network-analyzer_default に相乗りしているため）
+      url: http://na-grafana:3000/api/health
+    metrics:
+      - label: インターネット ロス率
+        source: prometheus
+        endpoint: http://na-prometheus:9090
+        query: 'network:probe_loss:ratio5m_by_layer{layer="internet"}'
+        format: percent
+        thresholds: {warn: 0.01, crit: 0.05}
+
+      - label: ゲートウェイ RTT
+        source: prometheus
+        endpoint: http://na-prometheus:9090
+        query: 'network:icmp_rtt:p95_5m_by_layer{layer="gateway"}'
+        format: seconds_ms
+        thresholds: {warn: 0.02, crit: 0.1}
+
+      - label: 発報中アラート
+        source: prometheus
+        endpoint: http://na-prometheus:9090
+        # or vector(0) を付けないと、0 件のときに空の結果になって
+        # 「取得失敗」と区別がつかなくなる。
+        query: 'count(ALERTS{alertstate="firing"}) or vector(0)'
+        format: count
+        thresholds: {warn: 1, crit: 1}
+
+  # -------------------------------------------------------------------------
+  - id: prometheus
+    name: Prometheus
+    description: 監視データの収集と保存。PromQL を直接叩きたいときや、ターゲットの取りこぼしを確認したいときに開く。
+    url: /prometheus
+    category: monitoring
+    health:
+      type: http
+      url: http://na-prometheus:9090/-/healthy
+    metrics:
+      - label: 収集中の系列数
+        source: prometheus
+        endpoint: http://na-prometheus:9090
+        query: 'prometheus_tsdb_head_series'
+        format: count
+
+      - label: 失敗中のターゲット
+        source: prometheus
+        endpoint: http://na-prometheus:9090
+        query: 'count(up == 0) or vector(0)'
+        format: count
+        thresholds: {warn: 1, crit: 3}
+
+  # -------------------------------------------------------------------------
+  - id: s1-host
+    name: s1 サーバ
+    description: このポータル自身が動いているホスト。CPU・メモリ・ディスク・温度の現在値。
+    # 遷移先を持たないサービス。数値カードだけを出す。
+    url: null
+    category: infra
+    health:
+      type: http
+      url: http://portal-node-exporter:9100/metrics
+    metrics:
+      - label: CPU 使用率
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: cpu_usage_ratio
+        format: percent
+        thresholds: {warn: 0.8, crit: 0.95}
+
+      - label: メモリ使用率
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: memory_usage_ratio
+        format: percent
+        thresholds: {warn: 0.85, crit: 0.95}
+
+      - label: ディスク使用率
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: rootfs_usage_ratio
+        format: percent
+        thresholds: {warn: 0.8, crit: 0.9}
+
+      - label: CPU 温度
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: cpu_temperature_celsius
+        format: celsius
+        thresholds: {warn: 70, crit: 85}
+
+      - label: 連続稼働
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: uptime_seconds
+        format: duration
