@@ -24,11 +24,42 @@ function formatDuration(seconds) {
   return `${minutes} 分`;
 }
 
+// サーバ側の Sensor.battery_level / battery_icon / battery_text と
+// そろえておく。ずれると更新の前後で見た目が変わる。
 function batteryLevel(battery) {
   if (battery === null || battery === undefined) return "none";
   if (battery <= 10) return "crit";
   if (battery <= 30) return "warn";
   return "ok";
+}
+
+function batteryIcon(battery) {
+  if (battery === null || battery === undefined) return "charging";
+  if (battery <= 10) return "warning";
+  if (battery <= 30) return "low";
+  if (battery <= 70) return "medium";
+  return "full";
+}
+
+function batteryText(battery) {
+  if (battery === null || battery === undefined) return "給電";
+  return `電池 ${Math.round(battery)}%`;
+}
+
+/** 電池のセルはアイコンなので、文字ではなく見た目の種類を差し替える。 */
+function setBattery(row, battery) {
+  const cell = row.querySelector(".cell-battery");
+  if (!cell) return;
+  cell.className = `num cell-battery level-${batteryLevel(battery)}`;
+
+  const icon = cell.querySelector(".battery-icon");
+  const text = batteryText(battery);
+  if (icon) {
+    icon.dataset.battery = batteryIcon(battery);
+    icon.title = text;
+  }
+  const hidden = cell.querySelector(".visually-hidden");
+  if (hidden) hidden.textContent = text;
 }
 
 function freshness(age) {
@@ -104,9 +135,7 @@ async function refresh() {
       sensor.temperature === null ? "—" : `${sensor.temperature.toFixed(1)} °C`);
     setCell(row, "cell-humidity",
       sensor.humidity === null ? "—" : `${Math.round(sensor.humidity)} %`);
-    setCell(row, "cell-battery",
-      sensor.battery === null ? "給電" : `${Math.round(sensor.battery)} %`,
-      batteryLevel(sensor.battery));
+    setBattery(row, sensor.battery);
     setCell(row, "cell-age",
       `${formatDuration(sensor.age_seconds)}前`,
       freshness(sensor.age_seconds));

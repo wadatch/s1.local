@@ -111,7 +111,9 @@
           <td class="num strong cell-temperature" data-label="温度">{{ format_value(sensor.temperature, 'celsius') }}</td>
           <td class="num cell-humidity" data-label="湿度">{{ format_value(sensor.humidity, 'percent100') }}</td>
           <td class="num cell-battery level-{{ sensor.battery_level }}" data-label="電池">
-            {% if sensor.battery is none %}給電{% else %}{{ format_value(sensor.battery, 'percent100') }}{% endif %}
+            <span class="battery-icon" data-battery="{{ sensor.battery_icon }}"
+                  title="{{ sensor.battery_text }}"></span>
+            <span class="visually-hidden">{{ sensor.battery_text }}</span>
           </td>
           <td class="num cell-age level-{{ sensor.freshness }}" data-label="取得">
             {{ format_value(sensor.age_seconds, 'duration') }}前

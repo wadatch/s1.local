@@ -300,6 +300,9 @@ def test_センサー一覧の行に自動更新用の目印が付く(make_app, 
             '# TYPE switchbot_temperature_celsius gauge\n'
             'switchbot_temperature_celsius'
             '{device_id="A",device_name="リビング",device_type="Meter"} 24.5\n'
+            '# TYPE switchbot_battery_percent gauge\n'
+            'switchbot_battery_percent'
+            '{device_id="A",device_name="リビング",device_type="Meter"} 92\n'
             '# TYPE switchbot_device_known gauge\n'
             'switchbot_device_known{device_id="A",device_name="リビング"} 1.0\n'
             'switchbot_device_known{device_id="B",device_name="止めたやつ"} 1.0\n'
@@ -321,6 +324,9 @@ def test_センサー一覧の行に自動更新用の目印が付く(make_app, 
     assert '/static/sensors.js' in body
     assert '/static/refresh-ui.js' in body
     assert 'data-refresh-button' in body, "手で更新する手段が要る"
+    # 電池はアイコンで出すが、値そのものも読み上げと吹き出しに残す
+    assert 'class="battery-icon" data-battery=' in body
+    assert '電池 92%' in body
 
 
 def test_グラフページが自動更新のスクリプトを読む(make_app):
