@@ -32,11 +32,15 @@ services:
     container_name: portal-app
     restart: unless-stopped
     volumes:
-      # 設定を read-only でマウントする。サービスを追加するとき
-      # コンテナを再起動せずに反映させるため（registry.py が mtime を見る）。
-      - ./config:/app/config:ro
+      # 書き込み可でマウントする。/sensors 画面のトグルが
+      # config/switchbot.yml を書き換えるため。
+      # サービスの追加も、コンテナを再起動せずに反映される
+      # （registry.py が mtime を見る）。
+      - ./config:/app/config
     environment:
       SERVICES_FILE: /app/config/services.yml
+      SWITCHBOT_CONFIG: /app/config/switchbot.yml
+      SWITCHBOT_EXPORTER_URL: http://portal-switchbot-exporter:9110
       STATUS_CACHE_SECONDS: ${STATUS_CACHE_SECONDS:-10}
       HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
     networks:

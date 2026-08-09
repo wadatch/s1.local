@@ -20,6 +20,7 @@ from exporter import (
     SwitchBotClient,
     SwitchBotCollector,
     SwitchBotError,
+    apply_exclusions,
     load_excluded,
     looks_offline,
     poll_once,
@@ -222,6 +223,115 @@ def test_除外したデバイスは状態を問い合わせない():
     assert excluded_route.call_count == 0, "除外したデバイスに問い合わせている"
     assert set(state.readings) == {"BBB"}
     assert state.offline == {}, "除外は「不調」ではないので計上しないこと"
+
+
+# --- 取得 ON/OFF の即時反映 -----------------------------------------------
+#
+# 取得そのものは API の回数制限があるため 10 分間隔だが、ON/OFF は画面操作なので
+# 待たされると「切り替えが効いていない」ように見える。設定ファイルは 15 秒ごとに
+# 見て、OFF はその場で反映する。
+
+def test_OFF_にした値はその場で消える():
+    state = State()
+    state.readings["AAA"] = Reading("AAA", "リビング", "Meter", 24.5, 55, 92, 1000.0)
+
+    apply_exclusions(state, {"AAA": "リビング"})
+
+    assert state.readings == {}, "次の取得を待たずに消えること"
+    assert state.excluded == {"AAA": "リビング"}
+
+
+def test_ON_に戻すと除外一覧から消える():
+    state = State()
+    state.excluded["AAA"] = "リビング"
+
+    apply_exclusions(state, {})
+
+    assert state.excluded == {}
+
+
+def test_OFF_は他のセンサーに影響しない():
+    state = State()
+    state.readings["AAA"] = Reading("AAA", "リビング", "Meter", 24.5, 55, 92, 1000.0)
+    state.readings["BBB"] = Reading("BBB", "寝室", "Meter", 21.0, 48, 88, 1000.0)
+
+    apply_exclusions(state, {"AAA": "リビング"})
+
+    assert set(state.readings) == {"BBB"}
+
+
+def test_値なし扱いだったセンサーを_OFF_にできる():
+    """電池切れで値なしになったものを、そのまま取得対象から外せること。"""
+    state = State()
+    state.offline["AAA"] = "リビング"
+
+    apply_exclusions(state, {"AAA": "リビング"})
+
+    assert state.offline == {}
+    assert state.excluded == {"AAA": "リビング"}
+
+
+def test_取得を止めたセンサーも公開する():
+    """公開しないと、画面から ON に戻せなくなる。"""
+    state = State()
+    state.excluded["AAA"] = "リビング"
+
+    families = collect_samples(state)
+    sample = families["switchbot_device_excluded"][0]
+    assert sample.labels == {"device_id": "AAA", "device_name": "リビング"}
+
+
+@respx.mock
+def test_見かけたセンサーは値が無くても公開する():
+    """ON に戻した直後は次の取得まで値が入らない。ここで公開しておかないと
+    その 10 分間だけ一覧から行ごと消えて、存在を見失う。"""
+    respx.get("https://api.switch-bot.com/v1.1/devices").mock(
+        return_value=httpx.Response(200, json=DEVICES_BODY)
+    )
+    respx.get("https://api.switch-bot.com/v1.1/devices/AAA/status").mock(
+        return_value=httpx.Response(200, json=status_body(24.5, 55, 92))
+    )
+    respx.get("https://api.switch-bot.com/v1.1/devices/BBB/status").mock(
+        return_value=httpx.Response(200, json=status_body(21.0, 48, 88))
+    )
+    respx.get("https://api.switch-bot.com/v1.1/devices/CCC/status").mock(
+        return_value=httpx.Response(200, json={"statusCode": 100, "body": {}})
+    )
+
+    state = State()
+    poll_once(SwitchBotClient(TOKEN, SECRET), state)
+
+    # 温度を持つ 2 台は覚えている。プラグ（CCC）は対象外
+    assert set(state.known) == {"AAA", "BBB"}
+
+    # OFF → ON した直後を再現する。値は消えるが存在は残る
+    apply_exclusions(state, {"AAA": "リビング"})
+    apply_exclusions(state, {})
+    assert "AAA" not in state.readings
+    assert "AAA" not in state.excluded
+    assert state.known["AAA"] == "リビング", "存在まで消えてはいけない"
+
+    names = {
+        s.labels["device_name"]
+        for s in collect_samples(state)["switchbot_device_known"]
+    }
+    assert names == {"リビング", "寝室"}
+
+
+def test_除外中のセンサーも見かけた一覧に入る():
+    """除外中でもデバイス一覧には出るので、名前は分かる。"""
+    respx_devices = DEVICES_BODY
+    assert respx_devices  # 参照を残す
+
+    state = State()
+    state.excluded["AAA"] = "リビング"
+    state.known["AAA"] = "リビング"
+
+    names = {
+        s.labels["device_name"]
+        for s in collect_samples(state)["switchbot_device_known"]
+    }
+    assert names == {"リビング"}
 
 
 # --- 値を持たないセンサーの扱い --------------------------------------------

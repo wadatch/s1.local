@@ -21,14 +21,17 @@ services:
   # 代表を入れ替えたいときは device_name を書き換えるだけでよい。
   - id: switchbot
     name: 温湿度センサー
-    description: 家じゅうの温湿度。代表的な数点だけを出している。全 30 台ぶんは開いて確認する。
+    description: 南棟・北棟・苗場の温湿度。代表を 1 点ずつ出している。全台は開いて確認する。
     url: /sensors
     category: home
     health:
       type: http
       url: http://portal-switchbot-exporter:9110/metrics
     metrics:
-      - label: 外の温度計
+      # 各ホームから 1 点ずつ。ここに書く device_name は
+      # config/switchbot.yml の devices に載っているもの（＝取得中のもの）に限る。
+      # 取得を止めたセンサーを指すと、値が「—」のままになる。
+      - label: 南棟 屋外
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
@@ -36,27 +39,27 @@ services:
         format: celsius
         thresholds: {warn: 30, crit: 35}
 
-      - label: リビング
+      - label: 南棟 1階
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: リビング温湿度管理}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 北棟 リビング
+        source: prometheus_text
+        endpoint: http://portal-switchbot-exporter:9110
+        metric: switchbot_temperature_celsius
+        labels: {device_name: 北棟リビング}
+        format: celsius
+        thresholds: {warn: 28, crit: 31}
+
+      - label: 苗場 リビング
         source: prometheus_text
         endpoint: http://portal-switchbot-exporter:9110
         metric: switchbot_temperature_celsius
         labels: {device_name: リビングの温度計}
-        format: celsius
-        thresholds: {warn: 28, crit: 31}
-
-      - label: ダイニング
-        source: prometheus_text
-        endpoint: http://portal-switchbot-exporter:9110
-        metric: switchbot_temperature_celsius
-        labels: {device_name: ダイニングの温度計}
-        format: celsius
-        thresholds: {warn: 28, crit: 31}
-
-      - label: 書斎
-        source: prometheus_text
-        endpoint: http://portal-switchbot-exporter:9110
-        metric: switchbot_temperature_celsius
-        labels: {device_name: 書斎の温度計}
         format: celsius
         thresholds: {warn: 28, crit: 31}
 

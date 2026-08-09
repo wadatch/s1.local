@@ -14,15 +14,22 @@
   <div class="wrap">
     <p class="breadcrumb"><a href="/">← s1.local</a></p>
     <h1>🌡 温湿度センサー</h1>
+    {%- set active = sensors | selectattr('enabled') | rejectattr('offline') | list -%}
+    {%- set offline = sensors | selectattr('offline') | list -%}
+    {%- set stopped = sensors | rejectattr('enabled') | list -%}
     <p class="tagline">
-      {{ sensors | rejectattr('offline') | list | length }} 台が値を返しています
-      {%- set offline = sensors | selectattr('offline') | list -%}
+      {{ active | length }} 台が値を返しています
       {%- if offline %}／{{ offline | length }} 台が値なし{% endif %}
+      {%- if stopped %}／{{ stopped | length }} 台は取得停止中{% endif %}
     </p>
   </div>
 </header>
 
 <main class="wrap">
+
+{% if notice %}
+  <div class="banner banner-notice">{{ notice }}</div>
+{% endif %}
 
 {% if error %}
   <div class="banner banner-error">
@@ -36,51 +43,106 @@
   </div>
 {% endif %}
 
-{% if sensors %}
-<div class="table-scroll">
-  <table class="sensors">
-    <thead>
-      <tr>
-        <th>センサー</th>
-        <th class="num">温度</th>
-        <th class="num">湿度</th>
-        <th class="num">電池</th>
-        <th class="num">取得</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for sensor in sensors %}
-      <tr {% if sensor.offline %}class="row-offline"{% endif %}>
-        <td>
-          <span class="sensor-name">{{ sensor.name }}</span>
-          <span class="sensor-type">{{ sensor.device_type }}</span>
-        </td>
+{% for group in groups %}
+<section class="home">
 
-        {% if sensor.offline %}
-        <td class="num" colspan="4">
-          <span class="pill pill-crit">値なし</span>
-          電池切れか圏外の可能性
-        </td>
-        {% else %}
-        <td class="num strong">{{ format_value(sensor.temperature, 'celsius') }}</td>
-        <td class="num">{{ format_value(sensor.humidity, 'percent100') }}</td>
-        <td class="num level-{{ sensor.battery_level }}">
-          {% if sensor.battery is none %}給電{% else %}{{ format_value(sensor.battery, 'percent100') }}{% endif %}
-        </td>
-        <td class="num level-{{ sensor.freshness }}">
-          {{ format_value(sensor.age_seconds, 'duration') }}前
-        </td>
-        {% endif %}
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+  <div class="home-head">
+    <h2>{{ group.name }}</h2>
+    <span class="home-count">
+      {{ group.active | length }} / {{ group.sensors | length }} 台が取得中
+    </span>
+    <form method="post" action="/sensors/toggle-home">
+      <input type="hidden" name="home" value="{{ group.name }}">
+      <input type="hidden" name="enabled" value="{{ 'on' if group.all_stopped else 'off' }}">
+      <button type="submit" class="toggle toggle-home {{ 'toggle-off' if group.all_stopped else 'toggle-on' }}"
+              title="{{ group.name }} のセンサー {{ group.sensors | length }} 台をまとめて切り替える">
+        {{ 'まとめて ON' if group.all_stopped else 'まとめて OFF' }}
+      </button>
+    </form>
+  </div>
+
+  <div class="table-scroll">
+    <table class="sensors">
+      <thead>
+        <tr>
+          <th>エリア</th>
+          <th>ルーム</th>
+          <th>センサー</th>
+          <th class="num">温度</th>
+          <th class="num">湿度</th>
+          <th class="num">電池</th>
+          <th class="num">取得</th>
+          <th class="num">API取得</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sensor in group.sensors %}
+        <tr class="{% if not sensor.enabled %}row-stopped{% elif sensor.offline %}row-offline{% endif %}">
+          <td class="area">{{ sensor.area or '—' }}</td>
+          <td class="room">{{ sensor.room or '—' }}</td>
+          <td>
+            <span class="sensor-name">{{ sensor.name }}</span>
+            <span class="sensor-type">{{ sensor.device_type }}</span>
+          </td>
+
+          {% if not sensor.enabled %}
+          <td class="num muted" colspan="4">取得を止めています</td>
+          {% elif sensor.pending %}
+          <td class="num muted" colspan="4">取得待ち（次の取得で値が入ります）</td>
+          {% elif sensor.offline %}
+          <td class="num" colspan="4">
+            <span class="pill pill-crit">値なし</span>
+            電池切れか圏外の可能性
+          </td>
+          {% else %}
+          <td class="num strong">{{ format_value(sensor.temperature, 'celsius') }}</td>
+          <td class="num">{{ format_value(sensor.humidity, 'percent100') }}</td>
+          <td class="num level-{{ sensor.battery_level }}">
+            {% if sensor.battery is none %}給電{% else %}{{ format_value(sensor.battery, 'percent100') }}{% endif %}
+          </td>
+          <td class="num level-{{ sensor.freshness }}">
+            {{ format_value(sensor.age_seconds, 'duration') }}前
+          </td>
+          {% endif %}
+
+          <td class="num">
+            <form method="post" action="/sensors/toggle">
+              <input type="hidden" name="device_id" value="{{ sensor.device_id }}">
+              <input type="hidden" name="device_name" value="{{ sensor.name }}">
+              <input type="hidden" name="enabled" value="{{ 'off' if sensor.enabled else 'on' }}">
+              <button type="submit"
+                      class="toggle {{ 'toggle-on' if sensor.enabled else 'toggle-off' }}"
+                      title="{% if sensor.enabled %}このセンサーへの問い合わせをやめる{% else %}このセンサーへの問い合わせを再開する{% endif %}">
+                {{ 'ON' if sensor.enabled else 'OFF' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</section>
+{% endfor %}
+
+{% if sensors %}
+<p class="note">
+  ホーム・エリア・ルームの対応づけは <code>config/switchbot.yml</code> で持っている。
+  <strong>SwitchBot API はホームもルームも返さない</strong>ため、設定側に置くしかない。
+  エリアの並び順は設定に書いた順。
+</p>
 
 <p class="note">
-  暑い順に並べている。「取得」は値を取り込んでからの経過時間で、
+  各ホームの中はエリア順、同じエリアの中は暑い順。「取得」は値を取り込んでからの経過時間で、
   これが伸びていれば表示中の温度はもう現在の値ではない。
   取得間隔は 10 分（SwitchBot API の 1 日 10,000 回の上限に収めるため）。
+</p>
+
+<p class="note">
+  <strong>API取得</strong> を OFF にすると、そのセンサーへの問い合わせを行わなくなる。
+  API の消費が減るので、使っていないセンサーは止めておくとよい。
+  OFF はすぐ反映され、ON に戻したときは次の取得（最大 10 分後）で値が入る。
 </p>
 {% endif %}
 
@@ -88,8 +150,8 @@
 
 <footer class="wrap site-footer">
   <p>
-    センサーの増減はそのまま反映される。取得対象から外すには
-    <code>config/switchbot.yml</code> に追記する。
+    センサーの増減はそのまま反映される。新しいセンサーは
+    <code>config/switchbot.yml</code> の <code>devices</code> に足すまで「未分類」に出る。
   </p>
 </footer>
 

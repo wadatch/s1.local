@@ -346,7 +346,90 @@ td.level-none,
 td.level-unknown { color: var(--text-muted); }
 
 .note {
-  margin: 16px 0 32px;
+  margin: 16px 0 12px;
   font-size: 0.8rem;
   color: var(--text-muted);
+}
+
+.note:last-of-type { margin-bottom: 32px; }
+
+.banner-notice {
+  border-color: var(--accent);
+  font-size: 0.88rem;
+}
+
+.row-stopped { opacity: 0.5; }
+
+td.muted { color: var(--text-muted); font-weight: 400; }
+
+/* --- 取得の ON/OFF ------------------------------------------------------ */
+
+table.sensors form { margin: 0; }
+
+.toggle {
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  min-width: 52px;
+}
+
+.toggle-on {
+  color: var(--ok);
+  background: var(--ok-bg);
+  border-color: var(--ok);
+}
+
+.toggle-off {
+  color: var(--text-muted);
+  background: var(--unknown-bg);
+  border-color: var(--border);
+}
+
+.toggle:hover { filter: brightness(1.1); }
+.toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* --- ホームごとの区切り -------------------------------------------------- */
+
+.home { margin-bottom: 36px; }
+
+.home-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.home-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.home-count {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.home-head form { margin: 0; }
+
+.toggle-home {
+  border-radius: 6px;
+  padding: 4px 12px;
+}
+
+td.area {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+td.room {
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }

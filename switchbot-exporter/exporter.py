@@ -120,6 +120,15 @@ class State:
     readings: dict[str, Reading] = field(default_factory=dict)
     # 応答はするが中身が空のセンサー（電池切れ・圏外）。device_id -> device_name
     offline: dict[str, str] = field(default_factory=dict)
+    # 取得対象から外しているセンサー。device_id -> device_name
+    # ポータルの画面から ON に戻せるよう、これも公開する。
+    excluded: dict[str, str] = field(default_factory=dict)
+    # 一度でも見かけた温度センサー全部。device_id -> device_name
+    #
+    # ON に戻した直後のセンサーは、次の取得（最大 10 分後）まで値を持たない。
+    # これが無いと**その間だけ一覧から行ごと消える**ため、画面から
+    # 存在を見失う。値の有無とは別に「居ること」を覚えておく。
+    known: dict[str, str] = field(default_factory=dict)
     last_success: float = 0.0
     api_errors: int = 0
     up: bool = False
@@ -184,6 +193,11 @@ def poll_once(
 
         if device_id in excluded:
             # 状態の問い合わせ自体を行わない。API の消費を減らすため。
+            # 名前はデバイス一覧から取れるので、除外中でも画面に出せる。
+            name = device.get("deviceName") or device_id
+            with state.lock:
+                state.excluded[device_id] = name
+                state.known[device_id] = name
             continue
 
         try:
@@ -200,6 +214,8 @@ def poll_once(
             continue
 
         name = device.get("deviceName") or device_id
+        with state.lock:
+            state.known[device_id] = name
 
         if looks_offline(status):
             with state.lock:
@@ -221,6 +237,7 @@ def poll_once(
         with state.lock:
             state.readings[device_id] = reading
             state.offline.pop(device_id, None)
+            state.excluded.pop(device_id, None)
 
     with state.lock:
         state.last_success = time.time()
@@ -248,6 +265,8 @@ class SwitchBotCollector:
         with self._state.lock:
             readings = list(self._state.readings.values())
             offline = dict(self._state.offline)
+            excluded = dict(self._state.excluded)
+            known = dict(self._state.known)
             up = self._state.up
             api_errors = self._state.api_errors
 
@@ -290,6 +309,26 @@ class SwitchBotCollector:
             offline_metric.add_metric([device_id, name], 1.0)
         yield offline_metric
 
+        # 一度でも見かけたセンサー全部。値がまだ無いものも画面に出せるようにする。
+        # ON に戻した直後の 10 分間、行ごと消えてしまうのを防ぐためのもの。
+        known_metric = GaugeMetricFamily(
+            "switchbot_device_known",
+            "一度でも見かけた温度センサー（値の有無によらない）",
+            labels=["device_id", "device_name"])
+        for device_id, name in known.items():
+            known_metric.add_metric([device_id, name], 1.0)
+        yield known_metric
+
+        # 取得を止めているセンサー。画面から ON に戻せるようにするため、
+        # 値が無くても存在は公開しておく。
+        excluded_metric = GaugeMetricFamily(
+            "switchbot_device_excluded",
+            "取得対象から外しているセンサー",
+            labels=["device_id", "device_name"])
+        for device_id, name in excluded.items():
+            excluded_metric.add_metric([device_id, name], 1.0)
+        yield excluded_metric
+
         offline_count = GaugeMetricFamily(
             "switchbot_offline_device_count", "値を持っていないセンサーの台数")
         offline_count.add_metric([], float(len(offline)))
@@ -309,6 +348,40 @@ class SwitchBotCollector:
             "switchbot_api_errors_total", "API 呼び出しに失敗した累計回数")
         errors.add_metric([], float(api_errors))
         yield errors
+
+
+def apply_exclusions(state: State, excluded: dict[str, str]) -> None:
+    """除外リストを今の状態に反映する。
+
+    OFF にしたセンサーの値をその場で消す。次の取得（既定 10 分後）まで
+    値が残っていると、画面で OFF にしたのに温度が出たままになり、
+    切り替えが効いていないように見えるため。
+    """
+    with state.lock:
+        for device_id, name in excluded.items():
+            if device_id in state.readings:
+                state.excluded[device_id] = state.readings[device_id].device_name
+                del state.readings[device_id]
+            elif device_id not in state.excluded:
+                state.excluded[device_id] = name
+            state.offline.pop(device_id, None)
+
+        # ON に戻されたものは除外一覧から消す。値は次の取得で入る。
+        for device_id in list(state.excluded):
+            if device_id not in excluded:
+                del state.excluded[device_id]
+
+
+def watch_config(state: State, config_path: str, interval: float = 15.0) -> None:
+    """設定ファイルを短い間隔で見て、除外の変更を即座に反映する。
+
+    取得そのものは API の回数制限があるため低頻度だが、
+    ON/OFF の切り替えは画面操作なので、待たされると壊れて見える。
+    ファイルを読むだけなので頻繁に見ても負荷にならない。
+    """
+    while True:
+        apply_exclusions(state, load_excluded(config_path))
+        time.sleep(interval)
 
 
 def run_poller(
@@ -415,6 +488,11 @@ def main() -> None:
         target=run_poller,
         args=(client, state, interval, config_path),
         daemon=True,
+    ).start()
+
+    # 取得とは別に、ON/OFF の切り替えだけを短い間隔で拾う。
+    threading.Thread(
+        target=watch_config, args=(state, config_path), daemon=True
     ).start()
 
     log.info("待ち受け開始 :%d（取得間隔 %.0f 秒）", port, interval)

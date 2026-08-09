@@ -9,9 +9,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
+from urllib.parse import quote
+
 import httpx
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Form
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
@@ -19,6 +21,7 @@ from starlette.requests import Request
 from . import health as health_mod
 from . import metrics as metrics_mod
 from . import sensors as sensors_mod
+from . import switchbot_config
 from .registry import RegistryCache, Service
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -151,22 +154,35 @@ async def healthz() -> dict[str, str]:
     return {"status": "ok"}
 
 
+async def _load_sensors() -> tuple[list[sensors_mod.Sensor], str]:
+    return await sensors_mod.fetch(
+        app.state.client,
+        SWITCHBOT_EXPORTER_URL,
+        switchbot_config.load_device_meta(),
+    )
+
+
 @app.get("/api/sensors")
 async def api_sensors() -> JSONResponse:
-    found, error = await sensors_mod.fetch(app.state.client, SWITCHBOT_EXPORTER_URL)
+    found, error = await _load_sensors()
     return JSONResponse(
         {
             "error": error or None,
+            "homes": switchbot_config.load_homes(),
             "sensors": [
                 {
                     "device_id": s.device_id,
                     "name": s.name,
                     "device_type": s.device_type,
+                    "home": s.home,
+                    "area": s.area,
+                    "room": s.room,
                     "temperature": s.temperature,
                     "humidity": s.humidity,
                     "battery": s.battery,
                     "age_seconds": s.age_seconds,
                     "offline": s.offline,
+                    "enabled": s.enabled,
                 }
                 for s in found
             ],
@@ -176,17 +192,83 @@ async def api_sensors() -> JSONResponse:
 
 
 @app.get("/sensors", response_class=HTMLResponse)
-async def sensors_page(request: Request) -> HTMLResponse:
-    found, error = await sensors_mod.fetch(app.state.client, SWITCHBOT_EXPORTER_URL)
+async def sensors_page(request: Request, notice: str | None = None) -> HTMLResponse:
+    found, error = await _load_sensors()
     return templates.TemplateResponse(
         request=request,
         name="sensors.html",
         context={
+            "groups": sensors_mod.group_by_home(
+                found,
+                switchbot_config.load_homes(),
+                switchbot_config.load_area_order(),
+            ),
             "sensors": found,
             "error": error,
+            "notice": notice,
             "format_value": metrics_mod.format_value,
         },
     )
+
+
+def _toggle_response(message: str) -> RedirectResponse:
+    """再読み込みで再送されないよう 303 で戻す。"""
+    return RedirectResponse(f"/sensors?notice={quote(message)}", status_code=303)
+
+
+@app.post("/sensors/toggle")
+async def sensors_toggle(
+    device_id: str = Form(...),
+    device_name: str = Form(""),
+    enabled: str = Form(...),
+) -> RedirectResponse:
+    """センサー 1 台の取得を切り替える。
+
+    フォームの POST で受ける。JS が無くても動くこと。
+    """
+    turning_on = enabled == "on"
+    try:
+        switchbot_config.set_enabled(device_id, device_name, turning_on)
+    except switchbot_config.ConfigWriteError as exc:
+        return _toggle_response(str(exc))
+
+    if turning_on:
+        return _toggle_response(
+            f"{device_name} の取得を再開しました。値は次の取得から入ります。"
+        )
+    return _toggle_response(f"{device_name} の取得を止めました。")
+
+
+@app.post("/sensors/toggle-home")
+async def sensors_toggle_home(
+    home: str = Form(...), enabled: str = Form(...)
+) -> RedirectResponse:
+    """ホームに属するセンサーをまとめて切り替える。
+
+    対象は「今その画面に出ているセンサー」ではなく、設定でそのホームに
+    属しているもの全部。画面に出ていないセンサーだけが取り残されるのを防ぐ。
+    """
+    turning_on = enabled == "on"
+
+    found, error = await _load_sensors()
+    if error:
+        return _toggle_response(f"センサー一覧を取得できません: {error}")
+
+    targets = {s.device_id: s.name for s in found if (s.home or "") == home}
+    if not targets:
+        return _toggle_response(f"{home} に属するセンサーが見つかりません。")
+
+    try:
+        switchbot_config.set_many_enabled(targets, turning_on)
+    except switchbot_config.ConfigWriteError as exc:
+        return _toggle_response(str(exc))
+
+    if turning_on:
+        return _toggle_response(
+            f"{home} の {len(targets)} 台の取得を再開しました。"
+            "値は次の取得から入ります。"
+        )
+    return _toggle_response(f"{home} の {len(targets)} 台の取得を止めました。")
 
 
 @app.get("/", response_class=HTMLResponse)

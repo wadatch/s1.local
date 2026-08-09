@@ -26,6 +26,25 @@ class Sensor:
     battery: float | None = None
     age_seconds: float | None = None
     offline: bool = False
+    # 取得を止めているセンサー。値は無いが、画面から ON に戻せるよう一覧に出す。
+    excluded: bool = False
+    # 所属。API からは取れないので設定で対応づける。
+    # home（棟）→ area（階・外部など）→ room（部屋）の 3 階層。
+    home: str = ""
+    area: str = ""
+    room: str = ""
+
+    @property
+    def enabled(self) -> bool:
+        return not self.excluded
+
+    @property
+    def pending(self) -> bool:
+        """取得中だがまだ値が入っていない状態。
+
+        ON に戻した直後に起きる。次の取得（最大 10 分後）で値が入る。
+        """
+        return self.enabled and not self.offline and self.temperature is None
 
     @property
     def battery_level(self) -> str:
@@ -79,18 +98,106 @@ def parse(text: str) -> list[Sensor]:
             elif sample.name == "switchbot_reading_age_seconds":
                 get(sample.labels).age_seconds = sample.value
             elif sample.name == "switchbot_device_offline":
-                sensor = get(sample.labels)
-                sensor.offline = True
+                get(sample.labels).offline = True
+            elif sample.name == "switchbot_device_excluded":
+                get(sample.labels).excluded = True
+            elif sample.name == "switchbot_device_known":
+                # 値がまだ無いセンサーも一覧に出すため、存在だけ登録する。
+                get(sample.labels)
 
     # 暑い順。異常に気づきやすいのと、屋外と室内が自然に分かれるため。
-    # 値の無いものは末尾へ。
+    # 値の無いものと取得を止めているものは末尾へ。
     return sorted(
         sensors.values(),
-        key=lambda s: (s.temperature is None, -(s.temperature or 0), s.name),
+        key=lambda s: (s.excluded, s.temperature is None, -(s.temperature or 0), s.name),
     )
 
 
-async def fetch(client: httpx.AsyncClient, endpoint: str) -> tuple[list[Sensor], str]:
+@dataclass
+class HomeGroup:
+    """1 つのホームに属するセンサーのまとまり。"""
+
+    name: str
+    sensors: list[Sensor]
+
+    @property
+    def active(self) -> list[Sensor]:
+        return [s for s in self.sensors if s.enabled and not s.offline]
+
+    @property
+    def stopped(self) -> list[Sensor]:
+        return [s for s in self.sensors if not s.enabled]
+
+    @property
+    def all_stopped(self) -> bool:
+        """このホーム全体が停止しているか。トグルの向きを決める。"""
+        return bool(self.sensors) and all(not s.enabled for s in self.sensors)
+
+
+def assign(sensors: list[Sensor], meta: dict[str, dict[str, str]]) -> None:
+    """設定の対応づけをセンサーに反映する。"""
+    for sensor in sensors:
+        info = meta.get(sensor.device_id)
+        if info:
+            sensor.home = info.get("home", "")
+            sensor.area = info.get("area", "")
+            sensor.room = info.get("room", "")
+
+
+def group_by_home(
+    sensors: list[Sensor],
+    homes: list[str],
+    area_order: dict[str, list[str]] | None = None,
+    unassigned_label: str = "未分類",
+) -> list[HomeGroup]:
+    """設定に書かれたホームの順で並べる。
+
+    ホームの中はエリア順（設定に書いた順）、同じエリアの中は暑い順。
+
+    設定に無いホームと、対応づけの無いセンサーは末尾にまとめる。
+    センサーを増やしたときに、設定を直すまで見えなくなるのを防ぐため。
+    """
+    area_order = area_order or {}
+    buckets: dict[str, list[Sensor]] = {home: [] for home in homes}
+
+    for sensor in sensors:
+        key = sensor.home or unassigned_label
+        buckets.setdefault(key, []).append(sensor)
+
+    def sort_key(home: str):
+        order = area_order.get(home, [])
+
+        def key(sensor: Sensor):
+            try:
+                area_index = order.index(sensor.area)
+            except ValueError:
+                # 設定に無いエリアは末尾へ
+                area_index = len(order)
+            return (
+                area_index,
+                sensor.area,
+                sensor.room,
+                sensor.temperature is None,
+                -(sensor.temperature or 0),
+                sensor.name,
+            )
+
+        return key
+
+    known = list(homes)
+    others = sorted(k for k in buckets if k not in known)
+    return [
+        HomeGroup(name, sorted(buckets[name], key=sort_key(name)))
+        for name in known + others
+        if buckets[name]
+    ]
+
+
+async def fetch(
+    client: httpx.AsyncClient,
+    endpoint: str,
+    meta: dict[str, dict[str, str]] | None = None,
+) -> tuple[list[Sensor], str]:
     """(センサー一覧, エラーメッセージ) を返す。例外は投げない。"""
     try:
         response = await client.get(f"{endpoint.rstrip('/')}/metrics")
@@ -101,6 +208,10 @@ async def fetch(client: httpx.AsyncClient, endpoint: str) -> tuple[list[Sensor],
         return [], f"exporter が HTTP {response.status_code} を返しました"
 
     try:
-        return parse(response.text), ""
+        found = parse(response.text)
     except Exception as exc:  # noqa: BLE001 - パース失敗でページを落とさない
         return [], f"応答を解釈できません: {type(exc).__name__}"
+
+    if meta:
+        assign(found, meta)
+    return found, ""
