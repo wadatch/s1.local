@@ -115,6 +115,89 @@ services:
         thresholds: {warn: 1, crit: 3}
 
   # -------------------------------------------------------------------------
+  # 有線と無線を同じサーバに対して順番に測っている。差がそのまま
+  # 「無線にすると何 Mbps 落ちるか」になる。
+  # 1 回の測定で数百 MB 流すので、測るのは 6 時間ごと。
+  - id: speed
+    name: 回線速度
+    description: 有線と無線それぞれのインターネット速度。同じサーバに順番に当てて測っているので、差は経路の違いそのもの。
+    url: null
+    category: monitoring
+    health:
+      type: http
+      url: http://host.docker.internal:9800/metrics
+
+    layout: matrix
+    matrix:
+      columns: [下り, 上り, Ping]
+      rows: [有線, 無線]
+
+    metrics:
+      - label: 有線 下り
+        row: 有線
+        column: 下り
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_download_bits_per_second
+        labels: {link: wired}
+        format: mbps
+
+      - label: 有線 上り
+        row: 有線
+        column: 上り
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_upload_bits_per_second
+        labels: {link: wired}
+        format: mbps
+
+      - label: 有線 Ping
+        row: 有線
+        column: Ping
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_ping_milliseconds
+        labels: {link: wired}
+        format: milliseconds
+        thresholds: {warn: 30, crit: 60}
+
+      - label: 無線 下り
+        row: 無線
+        column: 下り
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_download_bits_per_second
+        labels: {link: wifi}
+        format: mbps
+
+      - label: 無線 上り
+        row: 無線
+        column: 上り
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_upload_bits_per_second
+        labels: {link: wifi}
+        format: mbps
+
+      - label: 無線 Ping
+        row: 無線
+        column: Ping
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_ping_milliseconds
+        labels: {link: wifi}
+        format: milliseconds
+        thresholds: {warn: 30, crit: 60}
+
+      # 表の下に出る。古い値を今の速度と読み違えないための指標。
+      - label: 測ってから
+        source: prometheus_text
+        endpoint: http://host.docker.internal:9800
+        metric: home_speed_age_seconds
+        labels: {link: wired}
+        format: duration
+
+  # -------------------------------------------------------------------------
   - id: network-analyzer
     name: ネットワーク監視
     description: 宅内 〜 ルーター 〜 ISP 〜 インターネットの区間別に遅延とロスを常時計測している。どの区間が壊れているかの切り分けに使う。
@@ -174,7 +257,7 @@ services:
   # -------------------------------------------------------------------------
   - id: s1-host
     name: s1 サーバ
-    description: このポータル自身が動いているホスト。CPU・メモリ・ディスク・温度の現在値。
+    description: このポータル自身が動いているホスト。何が載っていて、今どうなっているか。
     # 遷移先を持たないサービス。数値カードだけを出す。
     url: null
     category: infra
@@ -182,6 +265,45 @@ services:
       type: http
       url: http://portal-node-exporter:9100/metrics
     metrics:
+      # --- スペックと OS -----------------------------------------------
+      # OS 名やカーネル版数は値ではなくラベルに入っているので value_from で拾う。
+      - label: OS
+        source: prometheus_text
+        endpoint: http://portal-node-exporter:9100
+        metric: node_os_info
+        value_from: pretty_name
+
+      - label: カーネル
+        source: prometheus_text
+        endpoint: http://portal-node-exporter:9100
+        metric: node_uname_info
+        value_from: release
+
+      - label: アーキテクチャ
+        source: prometheus_text
+        endpoint: http://portal-node-exporter:9100
+        metric: node_uname_info
+        value_from: machine
+
+      - label: CPU
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: cpu_cores
+        format: count
+
+      - label: メモリ
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: memory_total_bytes
+        format: bytes
+
+      - label: ディスク
+        source: node_exporter
+        endpoint: http://portal-node-exporter:9100
+        field: rootfs_total_bytes
+        format: bytes
+
+      # --- 今の状態 -----------------------------------------------------
       - label: CPU 使用率
         source: node_exporter
         endpoint: http://portal-node-exporter:9100

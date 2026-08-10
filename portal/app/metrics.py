@@ -25,6 +25,8 @@ class MetricResult:
     format: str
     thresholds: dict[str, float]
     detail: str = ""
+    # 数値ではなく文字を出す場合（OS 名など）。あればこちらを表示に使う。
+    text: str | None = None
     # layout=matrix のカードで、この値をどのマスに置くか。設定から素通しする。
     row: str = ""
     column: str = ""
@@ -32,6 +34,9 @@ class MetricResult:
     @property
     def level(self) -> str:
         """カードの色を決める段階。ok / warn / crit / unknown。"""
+        if self.text is not None:
+            # 文字は良し悪しの話ではないので、色を付けない。
+            return "info"
         if self.value is None:
             return "unknown"
         crit = self.thresholds.get("crit")
@@ -93,6 +98,7 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
     """node_exporter の /metrics 本文から、ポータルが出す値を組み立てる。"""
     cpu_idle = 0.0
     cpu_total = 0.0
+    cpu_ids: set[str] = set()
     mem_total: float | None = None
     mem_available: float | None = None
     fs_size: dict[str, float] = {}
@@ -104,6 +110,7 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
         if family.name == "node_cpu_seconds":
             for sample in family.samples:
                 cpu_total += sample.value
+                cpu_ids.add(sample.labels.get("cpu", ""))
                 if sample.labels.get("mode") == "idle":
                     cpu_idle += sample.value
         elif family.name == "node_memory_MemTotal_bytes":
@@ -136,6 +143,11 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
         if delta_total > 0:
             fields["cpu_usage_ratio"] = max(0.0, min(1.0, 1 - delta_idle / delta_total))
 
+    if cpu_ids:
+        fields["cpu_cores"] = float(len(cpu_ids))
+
+    if mem_total:
+        fields["memory_total_bytes"] = mem_total
     if mem_total and mem_available is not None:
         fields["memory_usage_ratio"] = 1 - mem_available / mem_total
 
@@ -143,6 +155,7 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
     # 環境によっては "/host" のまま出ることがあるので両方見る。
     for mountpoint in ("/", "/host"):
         if fs_size.get(mountpoint) and mountpoint in fs_avail:
+            fields["rootfs_total_bytes"] = fs_size[mountpoint]
             fields["rootfs_usage_ratio"] = 1 - fs_avail[mountpoint] / fs_size[mountpoint]
             break
 
@@ -159,6 +172,23 @@ def _extract_node_fields(text: str, endpoint: str) -> dict[str, float]:
 # --------------------------------------------------------------------------
 # 任意の /metrics（Prometheus テキスト形式）
 # --------------------------------------------------------------------------
+
+def _select_label(
+    text: str, metric: str, labels: dict[str, str], name: str
+) -> str | None:
+    """条件に合う系列から、指定したラベルの中身を返す。
+
+    OS 名やカーネル版数のように、Prometheus では値が 1 で中身がラベルに
+    入っているものを画面に出すために使う。
+    """
+    for family in text_string_to_metric_families(text):
+        for sample in family.samples:
+            if sample.name != metric:
+                continue
+            if all(sample.labels.get(k) == v for k, v in labels.items()):
+                return sample.labels.get(name)
+    return None
+
 
 def _select_sample(text: str, metric: str, labels: dict[str, str]) -> float | None:
     """metric 名と、指定したラベルをすべて含む系列を 1 つ選んで値を返す。
@@ -177,24 +207,35 @@ def _select_sample(text: str, metric: str, labels: dict[str, str]) -> float | No
 
 
 async def _query_prometheus_text(
-    client: httpx.AsyncClient, endpoint: str, metric: str, labels: dict[str, str]
-) -> tuple[float | None, str]:
+    client: httpx.AsyncClient,
+    endpoint: str,
+    metric: str,
+    labels: dict[str, str],
+    value_from: str | None = None,
+) -> tuple[float | None, str | None, str]:
+    """(数値, 文字, 説明) を返す。value_from を指定したときは文字のほうに入る。"""
     try:
         response = await client.get(f"{endpoint.rstrip('/')}/metrics")
     except httpx.HTTPError as exc:
-        return None, f"取得失敗: {type(exc).__name__}"
+        return None, None, f"取得失敗: {type(exc).__name__}"
 
     if response.status_code != 200:
-        return None, f"HTTP {response.status_code}"
+        return None, None, f"HTTP {response.status_code}"
 
     try:
+        if value_from:
+            label = _select_label(response.text, metric, labels, value_from)
+            if not label:
+                return None, None, "該当する系列がありません"
+            return None, label, ""
+
         value = _select_sample(response.text, metric, labels)
     except Exception as exc:  # noqa: BLE001 - パース失敗でページを落とさない
-        return None, f"パースできません: {type(exc).__name__}"
+        return None, None, f"パースできません: {type(exc).__name__}"
 
     if value is None:
-        return None, "該当する系列がありません"
-    return value, ""
+        return None, None, "該当する系列がありません"
+    return value, None, ""
 
 
 async def _query_node_exporter(
@@ -226,13 +267,15 @@ async def _query_node_exporter(
 async def fetch(client: httpx.AsyncClient, metric: Metric) -> MetricResult:
     """メトリクス 1 件を取得する。例外は投げない。"""
     value: float | None = None
+    text: str | None = None
     detail = ""
 
     if metric.source == "prometheus":
         value, detail = await _query_prometheus(client, metric.endpoint, metric.query)
     elif metric.source == "prometheus_text":
-        value, detail = await _query_prometheus_text(
-            client, metric.endpoint, metric.metric_name, metric.labels
+        value, text, detail = await _query_prometheus_text(
+            client, metric.endpoint, metric.metric_name, metric.labels,
+            metric.value_from,
         )
     elif metric.source == "node_exporter":
         value, detail = await _query_node_exporter(
@@ -245,6 +288,7 @@ async def fetch(client: httpx.AsyncClient, metric: Metric) -> MetricResult:
         format=metric.format,
         thresholds=metric.thresholds,
         detail=detail,
+        text=text,
         row=metric.row,
         column=metric.column,
     )
@@ -293,6 +337,11 @@ def format_value(value: float | None, fmt: str) -> str:
         return f"{value:.0f} %"
     if fmt == "seconds_ms":
         return f"{value * 1000:.1f} ms"
+    # 回線速度はビット毎秒で来る。Mbps は桁が読みやすい単位。
+    if fmt == "mbps":
+        return f"{value / 1e6:.0f} Mbps"
+    if fmt == "milliseconds":
+        return f"{value:.1f} ms"
     if fmt == "celsius":
         return f"{value:.1f} °C"
     if fmt == "count":

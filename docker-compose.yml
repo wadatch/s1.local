@@ -43,11 +43,17 @@ services:
       SERVICES_FILE: /app/config/services.yml
       SWITCHBOT_CONFIG: /app/config/switchbot.yml
       SWITCHBOT_EXPORTER_URL: http://portal-switchbot-exporter:9110
+      # speed-exporter は host ネットワークで動くのでコンテナ名では引けない。
+      # ホストの IP を直接書くと DHCP で変わったときに黙って壊れるので使わない。
+      SPEED_EXPORTER_URL: http://host.docker.internal:${SPEED_PORT:-9800}
       HISTORY_DB: /data/history.db
       HISTORY_INTERVAL_SECONDS: ${HISTORY_INTERVAL_SECONDS:-120}
       HISTORY_KEEP_DAYS: ${HISTORY_KEEP_DAYS:-90}
       STATUS_CACHE_SECONDS: ${STATUS_CACHE_SECONDS:-10}
       HEALTH_TIMEOUT_SECONDS: ${HEALTH_TIMEOUT_SECONDS:-3}
+    extra_hosts:
+      # host ネットワークで動く speed-exporter に到達するため
+      - "host.docker.internal:host-gateway"
     networks:
       # 監視対象へコンテナ名で到達するため、両方のネットワークに属する。
       - default
@@ -81,6 +87,28 @@ services:
     healthcheck:
       test: ["CMD", "python", "-c",
              "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9110/metrics', timeout=3).status == 200 else 1)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  speed-exporter:
+    build: ./speed-exporter
+    image: s1-portal/speed-exporter:local
+    container_name: portal-speed-exporter
+    restart: unless-stopped
+    # 有線と無線を測り分けるには、ホストのインターフェースにバインドする
+    # 必要がある。ブリッジ上だと既定経路（＝有線）からしか出ていけない。
+    network_mode: host
+    environment:
+      # name:interface を書いた順に測る。最初のものが基準のサーバを決める。
+      SPEED_LINKS: ${SPEED_LINKS:-wired:eno1,wifi:wlp3s0}
+      # 1 回の測定で数百 MB を流す。頻繁に測ると回線を占有して通信量も食う。
+      SPEED_INTERVAL_SECONDS: ${SPEED_INTERVAL_SECONDS:-21600}
+      SPEED_PORT: ${SPEED_PORT:-9800}
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9800/metrics', timeout=3).status == 200 else 1)"]
       interval: 60s
       timeout: 5s
       retries: 3

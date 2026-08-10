@@ -41,6 +41,7 @@ check:
 test:
 	docker build -t s1-portal/portal:test --target test ./portal
 	docker build -t s1-portal/switchbot-exporter:test --target test ./switchbot-exporter
+	docker build -t s1-portal/speed-exporter:test --target test ./speed-exporter
 
 # services.yml に書くデバイス名を調べるためのもの。
 # 認証情報は s1 の .env にあるので、s1 側で実行する。
