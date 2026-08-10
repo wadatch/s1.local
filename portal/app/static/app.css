@@ -309,6 +309,15 @@ body {
 .metric.level-crit dd { color: var(--crit); }
 .metric.level-unknown dd { color: var(--unknown); }
 
+/* 文字の値（OS 名など）。良し悪しの話ではないので色を付けない。
+   長い文字列でカードが横に伸びないよう、折り返す。 */
+.metric.level-info dd {
+  color: var(--text);
+  font-size: 0.92rem;
+  white-space: normal;
+  word-break: break-word;
+}
+
 /* --- 行×列のカード（屋外/屋内 × 棟）------------------------------------- */
 
 table.matrix {

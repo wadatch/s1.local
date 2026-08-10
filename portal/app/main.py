@@ -111,7 +111,10 @@ def _service_payload(
             "row": m.row,
             "column": m.column,
             "value": m.value,
-            "display": metrics_mod.format_value(m.value, m.format),
+            "display": (
+                m.text if m.text is not None
+                else metrics_mod.format_value(m.value, m.format)
+            ),
             "level": m.level,
             "detail": m.detail,
         }

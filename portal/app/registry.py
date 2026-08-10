@@ -22,6 +22,8 @@ VALID_FORMATS = {
     "percent",
     "percent100",
     "seconds_ms",
+    "mbps",
+    "milliseconds",
     "bytes",
     "count",
     "celsius",
@@ -52,6 +54,9 @@ class Metric:
     # source=prometheus_text 用。metric 名と、系列を絞り込むラベル。
     metric_name: str | None = None
     labels: dict[str, str] = field(default_factory=dict)
+    # 値ではなくラベルの中身を出したいときに使う（OS 名やカーネル版数など、
+    # Prometheus では値 1 の系列にラベルとして入っているもの）。
+    value_from: str | None = None
     format: str = "raw"
     thresholds: dict[str, float] = field(default_factory=dict)
     # layout=matrix のカードで、この値をどのマスに置くか。
@@ -143,6 +148,7 @@ def _validate_metric(raw: Any, index: int, errors: list[str]) -> Metric | None:
         field_name=raw.get("field"),
         metric_name=raw.get("metric"),
         labels={str(k): str(v) for k, v in labels.items()},
+        value_from=raw.get("value_from"),
         format=fmt,
         thresholds={k: float(v) for k, v in thresholds.items() if k in ("warn", "crit")},
     )

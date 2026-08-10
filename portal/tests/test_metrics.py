@@ -143,6 +143,26 @@ def test_メモリとディスクの使用率を算出できる():
     assert fields["rootfs_usage_ratio"] == pytest.approx(0.75)
 
 
+def test_スペックを取り出せる():
+    """何が載っているかも見たい。CPU の数は系列の数から数える。"""
+    _cpu_samples.clear()
+    fields = _extract_node_fields(NODE_TEXT, "test-spec")
+    assert fields["cpu_cores"] == 1, "NODE_TEXT には cpu=0 しかない"
+    assert fields["memory_total_bytes"] == pytest.approx(1.6e10)
+    assert fields["rootfs_total_bytes"] == 1000
+
+
+def test_CPU_の数は重複を数えない():
+    _cpu_samples.clear()
+    text = NODE_TEXT.replace(
+        'node_cpu_seconds_total{cpu="0",mode="idle"} 800',
+        'node_cpu_seconds_total{cpu="0",mode="idle"} 800\n'
+        'node_cpu_seconds_total{cpu="1",mode="idle"} 800\n'
+        'node_cpu_seconds_total{cpu="1",mode="user"} 100',
+    )
+    assert _extract_node_fields(text, "test-cores")["cpu_cores"] == 2
+
+
 def test_温度は最大値を採る():
     """平均だと熱くなっている箇所が埋もれるため。"""
     _cpu_samples.clear()
@@ -274,6 +294,62 @@ def test_同名の別メトリクスと取り違えない():
     ) == 92.0
 
 
+INFO_TEXT = """\
+# TYPE node_os_info gauge
+node_os_info{id="ubuntu",name="Ubuntu",pretty_name="Ubuntu 26.04 LTS",version="26.04"} 1
+# TYPE node_uname_info gauge
+node_uname_info{machine="x86_64",release="7.0.0-29-generic",sysname="Linux"} 1
+"""
+
+
+def test_ラベルの中身を取り出せる():
+    """OS 名やカーネル版数は、値ではなくラベルに入っている。"""
+    from app.metrics import _select_label
+    assert _select_label(INFO_TEXT, "node_os_info", {}, "pretty_name") == "Ubuntu 26.04 LTS"
+    assert _select_label(INFO_TEXT, "node_uname_info", {}, "release") == "7.0.0-29-generic"
+    assert _select_label(INFO_TEXT, "node_uname_info", {}, "machine") == "x86_64"
+
+
+def test_無いラベルなら空を返す():
+    from app.metrics import _select_label
+    assert _select_label(INFO_TEXT, "node_os_info", {}, "そんなラベルはない") is None
+
+
+@respx.mock
+async def test_文字の値を取得できる(client):
+    respx.get("http://node:9100/metrics").mock(
+        return_value=httpx.Response(200, text=INFO_TEXT)
+    )
+    metric = Metric(
+        label="OS",
+        source="prometheus_text",
+        endpoint="http://node:9100",
+        metric_name="node_os_info",
+        value_from="pretty_name",
+    )
+    result = await fetch(client, metric)
+    assert result.text == "Ubuntu 26.04 LTS"
+    assert result.value is None
+    assert result.level == "info", "文字は良し悪しの話ではないので色を付けない"
+
+
+@respx.mock
+async def test_文字の値が無ければ系列なし扱い(client):
+    respx.get("http://node:9100/metrics").mock(
+        return_value=httpx.Response(200, text=INFO_TEXT)
+    )
+    metric = Metric(
+        label="OS",
+        source="prometheus_text",
+        endpoint="http://node:9100",
+        metric_name="node_os_info",
+        value_from="そんなラベルはない",
+    )
+    result = await fetch(client, metric)
+    assert result.text is None
+    assert "系列がありません" in result.detail
+
+
 @respx.mock
 async def test_prometheus_text_から値を取得できる(client):
     respx.get("http://sb:9110/metrics").mock(
@@ -358,6 +434,9 @@ def test_閾値が無ければ常に_ok():
         (57.4, "celsius", "57.4 °C"),
         (24.5, "celsius", "24.5 °C"),
         (55.0, "percent100", "55 %"),
+        (556_686_024, "mbps", "557 Mbps"),
+        (66_116_000, "mbps", "66 Mbps"),
+        (12.53, "milliseconds", "12.5 ms"),
         (0.55, "percent", "55.0 %"),
         (3.0, "count", "3"),
         (0.0, "count", "0"),
