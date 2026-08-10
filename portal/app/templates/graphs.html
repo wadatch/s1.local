@@ -12,7 +12,7 @@
 
 <header class="site-header">
   <div class="wrap">
-    <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/sensors">センサー一覧</a></p>
+    <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/sensors">🌡 センサー一覧</a></p>
     <h1>📈 温湿度グラフ</h1>
     <p class="tagline">
       見たいセンサーを選ぶ。ホームごとにまとめて選ぶこともできる。
@@ -35,6 +35,19 @@
     <strong>センサー一覧を取得できません。</strong> {{ error }}
   </div>
 {% endif %}
+
+{# 表示条件は畳める。決めてしまえば見たいのはグラフなので、
+   畳んだぶんだけグラフが上に来る。開閉の記憶は collapse.js。
+   畳んでいる間も何を見ているかが分かるよう、summary に今の条件を出す
+   （中身は graphs.js が書き込む）。 #}
+<details class="panel" data-collapse-key="graph-controls" open>
+
+  <summary class="panel-head">
+    <span class="panel-title">表示条件</span>
+    <span class="panel-summary" id="controls-summary"></span>
+  </summary>
+
+  <div class="panel-body">
 
 <form id="controls" class="controls">
 
@@ -93,6 +106,9 @@
   {% endfor %}
 </div>
 
+  </div>
+</details>
+
 <div id="charts" class="charts"></div>
 
 <p class="note" id="record-span"></p>
@@ -116,6 +132,7 @@
   <p>取得を止めているセンサーは記録されないため、ここには出ない。</p>
 </footer>
 
+<script src="/static/collapse.js" defer></script>
 <script src="/static/switchbot-refresh.js" defer></script>
 <script src="/static/refresh-ui.js" defer></script>
 <script src="/static/graphs.js" defer></script>

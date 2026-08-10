@@ -12,7 +12,7 @@
 
 <header class="site-header">
   <div class="wrap">
-    <p class="breadcrumb"><a href="/">← s1.local</a>　<a href="/graphs">📈 グラフ</a></p>
+    <p class="breadcrumb"><a href="/">← s1.local</a></p>
     <h1>🌡 温湿度センサー</h1>
     {%- set active = sensors | selectattr('enabled') | rejectattr('offline') | list -%}
     {%- set offline = sensors | selectattr('offline') | list -%}
@@ -29,6 +29,13 @@
         <span class="refresh-icon">↻</span> 更新
       </button>
       <span id="refresh-note" class="refresh-note"></span>
+    </p>
+    {# この表は「今」しか見せられない。推移を見たい人がグラフに辿り着けるよう、
+       breadcrumb の小さな文字ではなくボタンとして出す。 #}
+    <p class="page-links">
+      <a class="page-link" href="/graphs">
+        📈 温度・湿度の推移をグラフで見る
+      </a>
     </p>
   </div>
 </header>
@@ -52,13 +59,24 @@
 {% endif %}
 
 {% for group in groups %}
-<section class="home">
+{# ホームは畳める。32 台あると、全部開いたままでは目的の 1 台まで遠い。
+   開閉の記憶は collapse.js（取得の ON/OFF でページが読み直されるため）。
+   summary の中身は h2 ひとつにする（HTML の決まりで、見出しを入れるなら
+   それが唯一の子でなければならない）。 #}
+<details class="home" data-collapse-key="home:{{ group.name }}" open>
 
-  <div class="home-head">
-    <h2>{{ group.name }}</h2>
-    <span class="home-count">
-      {{ group.active | length }} / {{ group.sensors | length }} 台が取得中
-    </span>
+  <summary class="home-head">
+    <h2>
+      {{ group.name }}
+      <span class="home-count">
+        {{ group.active | length }} / {{ group.sensors | length }} 台が取得中
+      </span>
+    </h2>
+  </summary>
+
+  {# 「まとめて」は summary の外に置く。中に置くとボタンを押すだけで
+     折りたたみも動いてしまう。 #}
+  <div class="home-actions">
     <form method="post" action="/sensors/toggle-home">
       <input type="hidden" name="home" value="{{ group.name }}">
       <input type="hidden" name="enabled" value="{{ 'on' if group.all_stopped else 'off' }}">
@@ -67,6 +85,7 @@
         {{ 'まとめて ON' if group.all_stopped else 'まとめて OFF' }}
       </button>
     </form>
+    <a class="home-graph-link" href="/graphs">📈 グラフで見る</a>
   </div>
 
   <div class="table-scroll">
@@ -79,6 +98,7 @@
           <th class="num">温度</th>
           <th class="num">湿度</th>
           <th class="num">不快指数</th>
+          <th class="num">熱中症</th>
           <th class="num">電池</th>
           <th class="num">取得</th>
           <th class="num">API取得</th>
@@ -101,11 +121,11 @@
           </td>
 
           {% if row_state == 'stopped' %}
-          <td class="num muted note-cell" colspan="5">取得を止めています</td>
+          <td class="num muted note-cell" colspan="6">取得を止めています</td>
           {% elif row_state == 'pending' %}
-          <td class="num muted note-cell" colspan="5">取得待ち（次の取得で値が入ります）</td>
+          <td class="num muted note-cell" colspan="6">取得待ち（次の取得で値が入ります）</td>
           {% elif row_state == 'offline' %}
-          <td class="num note-cell" colspan="5">
+          <td class="num note-cell" colspan="6">
             <span class="pill pill-crit">値なし</span>
             電池切れか圏外の可能性
           </td>
@@ -115,6 +135,13 @@
           <td class="num cell-discomfort di-{{ sensor.discomfort_level }}" data-label="不快指数"
               title="{{ sensor.discomfort_text }}">
             {%- if sensor.discomfort is none %}—{% else %}{{ '%.0f'|format(sensor.discomfort) }}{% endif -%}
+          </td>
+          {# リスクはアイコンで出す。並べたときに危ない部屋が数字を読まずに
+             目に入ること。意味は吹き出しと読み上げに文字で残す。 #}
+          <td class="num cell-heat heat-{{ sensor.heat_level }}" data-label="熱中症"
+              title="{{ sensor.heat_text }}">
+            <span class="heat-icon" data-heat="{{ sensor.heat_icon }}"></span>
+            <span class="visually-hidden">{{ sensor.heat_text }}</span>
           </td>
           <td class="num cell-battery level-{{ sensor.battery_level }}" data-label="電池">
             <span class="battery-icon" data-battery="{{ sensor.battery_icon }}"
@@ -144,71 +171,87 @@
     </table>
   </div>
 
-</section>
+</details>
 {% endfor %}
 
 {% if sensors %}
-<p class="note">
-  ホーム・エリア・ルームの対応づけは <code>config/switchbot.yml</code> で持っている。
-  <strong>SwitchBot API はホームもルームも返さない</strong>ため、設定側に置くしかない。
-  エリアの並び順は設定に書いた順。
-</p>
+{# 説明は「色の凡例」と「列の意味」の 2 つに絞る。理屈（なぜ 10 分間隔か、
+   不快指数の式、ホームを設定で持つ理由）はここでは要らない。読む人が
+   知りたいのは、この画面の数字をどう読むかだけ。理屈は CLAUDE.md にある。 #}
+<dl class="note colour-key">
+  <dt>温度</dt>
+  <dd>
+    <span class="key temp-cold">寒い</span>
+    <span class="key temp-comfort">快適 18〜26℃</span>
+    <span class="key temp-hot">暑い</span>
+  </dd>
 
-<p class="note">
-  各ホームの中はエリア順、同じエリアの中は暑い順。「取得」は値を取り込んでからの経過時間で、
-  これが伸びていれば表示中の温度はもう現在の値ではない。
-  取得間隔は 10 分（SwitchBot API の 1 日 10,000 回の上限に収めるため）。
-</p>
+  <dt>湿度</dt>
+  <dd>
+    <span class="key hum-dry">乾燥</span>
+    <span class="key hum-comfort">快適 40〜60%</span>
+    <span class="key hum-humid">多湿</span>
+  </dd>
 
-<p class="note">
-  この表は 30 秒ごとに自動で更新される（画面の描き直しだけ）。
-  <strong>「更新」ボタンとスマホの引っ張り更新は、SwitchBot から値を取り直す。</strong>
-  ただし取ったばかりのときは断る（値は 10 分ごとにしか変わらないので、
-  連打しても API の回数を使うだけになる）。
-</p>
+  <dt>不快指数</dt>
+  <dd>
+    <span class="key di-cold">55 未満 寒い</span>
+    <span class="key di-comfort">75 未満 快適</span>
+    <span class="key di-warm">80 未満 やや暑い</span>
+    <span class="key di-hot">80 以上 暑い</span>
+  </dd>
 
-<p class="note colour-key">
-  色の意味：
-  <span class="key temp-cold">寒い</span>
-  <span class="key temp-comfort">快適 18〜26℃</span>
-  <span class="key temp-hot">暑い</span>
-  ／
-  <span class="key hum-dry">乾燥</span>
-  <span class="key hum-comfort">快適 40〜60%</span>
-  <span class="key hum-humid">多湿</span>
-  ／
-  電池は
-  <span class="key bat-ok">十分</span>
-  <span class="key bat-warn">少ない</span>
-  <span class="key bat-crit">要交換</span>
-</p>
+  {# 表と同じアイコンを並べる。形と意味の対応は、ここでしか分からない。 #}
+  <dt>熱中症</dt>
+  <dd>
+    <span class="key heat-safe"><span class="heat-icon" data-heat="shield-check"></span>ほぼ安全</span>
+    <span class="key heat-caution"><span class="heat-icon" data-heat="shield-alert"></span>注意</span>
+    <span class="key heat-warn"><span class="heat-icon" data-heat="triangle-alert"></span>警戒</span>
+    <span class="key heat-severe"><span class="heat-icon" data-heat="octagon-alert"></span>厳重警戒</span>
+    <span class="key heat-danger"><span class="heat-icon" data-heat="siren"></span>危険</span>
+  </dd>
 
-<p class="note">
-  <strong>不快指数</strong>は温度と湿度をまとめた体感の目安
-  （DI = 0.81T + 0.01H(0.99T − 14.3) + 46.3）。
-  同じ 28℃ でも湿度 40% と 80% では体感がまるで違うので、1 つの数字にしてある。
-  <span class="key di-cold">55 未満 寒い</span>
-  <span class="key di-comfort">75 未満 快適</span>
-  <span class="key di-warm">80 未満 やや暑い</span>
-  <span class="key di-hot">80 以上 暑い</span>
-</p>
+  <dt>電池</dt>
+  <dd>
+    <span class="key bat-ok">十分</span>
+    <span class="key bat-warn">少ない</span>
+    <span class="key bat-crit">要交換</span>
+  </dd>
+</dl>
 
-<p class="note">
-  <strong>API取得</strong> を OFF にすると、そのセンサーへの問い合わせを行わなくなる。
-  API の消費が減るので、使っていないセンサーは止めておくとよい。
-  OFF はすぐ反映され、ON に戻したときは次の取得（最大 10 分後）で値が入る。
-</p>
+<dl class="note terms">
+  <dt>不快指数</dt>
+  <dd>温度と湿度をまとめた体感の目安。同じ 28℃ でも湿度で体感は変わる。</dd>
+
+  <dt>熱中症</dt>
+  <dd>温度と湿度から暑さ指数（WBGT）を推定し、日本生気象学会の区分で表した
+      <strong>目安</strong>。日射や風は測れないので、窓際や風の通らない部屋では
+      実際にはこれより危ない。</dd>
+
+  <dt>取得</dt>
+  <dd>値を取り込んでからの経過時間。伸びていれば、もう今の値ではない。</dd>
+
+  <dt>更新</dt>
+  <dd>表は 30 秒ごとに描き直す。「更新」と引っ張り更新だけ SwitchBot から
+      取り直す（取った直後は断る）。値が変わるのは 10 分ごと。</dd>
+
+  <dt>API取得</dt>
+  <dd>OFF にすると問い合わせをやめる。OFF は即時、ON は次の取得
+      （最大 10 分後）から値が入る。</dd>
+</dl>
 {% endif %}
 
 </main>
 
 <footer class="wrap site-footer">
   <p>
-    センサーの増減はそのまま反映される。新しいセンサーは
-    <code>config/switchbot.yml</code> の <code>devices</code> に足すまで「未分類」に出る。
+    並びはエリア順、同じエリアでは暑い順。センサーの増減はそのまま反映され、
+    新しいセンサーは <code>config/switchbot.yml</code> の <code>devices</code> に
+    足すまで「未分類」に出る。
   </p>
 </footer>
 
+<script src="/static/collapse.js" defer></script>
 <script src="/static/switchbot-refresh.js" defer></script>
 <script src="/static/refresh-ui.js" defer></script>
 <script src="/static/sensors.js" defer></script>

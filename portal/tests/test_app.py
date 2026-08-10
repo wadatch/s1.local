@@ -333,6 +333,53 @@ def test_センサー一覧の行に自動更新用の目印が付く(make_app, 
     assert 'cell-battery level-ok' in body, "92% は十分の色"
 
 
+@respx.mock
+def test_センサー一覧はホームごとに畳める(make_app, monkeypatch):
+    """32 台あるので、見ないホームは畳めること。
+
+    畳んだ状態は取得の ON/OFF（POST で再読み込み）を挟んでも残る必要がある。
+    覚える役は collapse.js なので、ここでは目印が付いていることだけを見る。
+    """
+    monkeypatch.setenv("SWITCHBOT_EXPORTER_URL", "http://sb:9110")
+    respx.get("http://sb:9110/metrics").mock(
+        return_value=httpx.Response(200, text=(
+            '# TYPE switchbot_temperature_celsius gauge\n'
+            'switchbot_temperature_celsius'
+            '{device_id="A",device_name="リビング",device_type="Meter"} 24.5\n'
+        ))
+    )
+
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app) as client:
+        body = client.get("/sensors").text
+
+    assert "<details class=\"home\"" in body
+    assert 'data-collapse-key="home:' in body
+    assert "/static/collapse.js" in body
+    # 既定は開いた状態。初めて開いた人に中身が見えていること。
+    assert " open>" in body
+    # 「まとめて」は summary の外。中にあると押すだけで開閉も動く。
+    assert 'class="home-actions"' in body
+
+
+@respx.mock
+def test_センサー一覧からグラフへの導線がボタンで出る(make_app, monkeypatch):
+    """この表は「今」しか見せられないので、推移を見たい人が辿り着けること。"""
+    monkeypatch.setenv("SWITCHBOT_EXPORTER_URL", "http://sb:9110")
+    respx.get("http://sb:9110/metrics").mock(
+        return_value=httpx.Response(200, text=(
+            'switchbot_temperature_celsius'
+            '{device_id="A",device_name="リビング",device_type="Meter"} 24.5\n'
+        ))
+    )
+
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app) as client:
+        body = client.get("/sensors").text
+
+    assert 'class="page-link" href="/graphs"' in body
+
+
 def test_グラフページが自動更新のスクリプトを読む(make_app):
     main_module, _ = make_app("services: []\n")
     with TestClient(main_module.app) as client:
@@ -340,6 +387,24 @@ def test_グラフページが自動更新のスクリプトを読む(make_app):
     assert "/static/graphs.js" in body
     assert "/static/refresh-ui.js" in body
     assert "data-refresh-button" in body
+
+
+def test_グラフページの表示条件が畳める(make_app):
+    """決めてしまえば見たいのはグラフなので、条件は畳めること。
+
+    畳んでいる間も何を見ているかが分かるよう、要約の置き場が要る
+    （中身は graphs.js が書き込む）。
+    """
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app) as client:
+        body = client.get("/graphs").text
+
+    assert 'data-collapse-key="graph-controls"' in body
+    assert 'id="controls-summary"' in body
+    assert "/static/collapse.js" in body
+    # 畳めても中の操作系はそのまま残っていること
+    assert 'id="range-buttons"' in body
+    assert 'class="picker"' in body
 
 
 def test_healthz(make_app):
@@ -354,3 +419,38 @@ def test_サービスが空でも案内を出す(make_app):
         response = client.get("/")
     assert response.status_code == 200
     assert "まだ登録されていません" in response.text
+
+
+def test_HTTPS_の入口へのリンクが出る(make_app, monkeypatch):
+    """s1.local で開いたら、鍵の付く入口へ自分で移れること。
+
+    リダイレクトにはしない。Tailscale に入っていない端末は ts.net 名に
+    到達できず、飛ばすとポータル自体が開けなくなるため。
+    """
+    monkeypatch.setenv("TS_HOSTNAME", "s1.example.ts.net")
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app, base_url="http://s1.local") as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'href="https://s1.example.ts.net/"' in response.text
+    assert response.status_code != 302, "自動では飛ばさない"
+
+
+def test_HTTPS_で開いているときはリンクを出さない(make_app, monkeypatch):
+    monkeypatch.setenv("TS_HOSTNAME", "s1.example.ts.net")
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app, base_url="https://s1.example.ts.net") as client:
+        body = client.get("/").text
+
+    assert "HTTPS で開く" not in body
+
+
+def test_TS_HOSTNAME_が空ならリンクを出さない(make_app, monkeypatch):
+    """Tailscale を使っていない環境で死んだリンクを出さないこと。"""
+    monkeypatch.setenv("TS_HOSTNAME", "")
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app, base_url="http://s1.local") as client:
+        body = client.get("/").text
+
+    assert "HTTPS で開く" not in body

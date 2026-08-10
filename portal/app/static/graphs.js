@@ -135,6 +135,28 @@ function paintSwatches() {
   });
 }
 
+/** 選ばれているボタンの文字。表示条件の要約に使う。 */
+function activeLabel(id) {
+  const button = document.querySelector(`#${id} button.active`);
+  return button ? button.textContent.trim() : "";
+}
+
+/** 表示条件を畳んでいる間、何を見ているかが分かるようにする。
+ *
+ * ボタンの文字をそのまま使う。ここで名前を書き直すと、開いたときの
+ * ボタンと畳んだときの要約で言葉が食い違う。
+ */
+function renderControlsSummary() {
+  const el = document.getElementById("controls-summary");
+  if (!el) return;
+  const count = selectedDevices().length;
+  el.textContent = [
+    activeLabel("range-buttons"),
+    activeLabel("metric-buttons"),
+    count ? `${count} 台` : "センサー未選択",
+  ].filter(Boolean).join("・");
+}
+
 // --- 取得 -----------------------------------------------------------------
 
 async function load(manual) {
@@ -152,6 +174,7 @@ async function load(manual) {
   syncHomeChecks();
   paintSwatches();
   saveSelection();
+  renderControlsSummary();
 
   const charts = document.getElementById("charts");
 

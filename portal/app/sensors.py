@@ -92,6 +92,82 @@ class Sensor:
         }[self.discomfort_level]
 
     @property
+    def wbgt(self) -> float | None:
+        """暑さ指数 WBGT の**推定値**。熱中症リスクの判定に使う。
+
+            WBGT ≒ 0.735T + 0.0374H + 0.00292TH − 4.064
+
+        小野・登内 (2014) が日本の気象データから作った回帰式で、日射なし・
+        無風（＝室内）の条件を当てはめたもの。
+
+        **これは推定であって測定ではない。** 本来の WBGT は黒球温度と
+        自然湿球温度を測って出すもので、温湿度計だけでは求められない。
+        直射日光の当たる窓際や、風の通らない部屋では実際の値がこれより
+        高くなる。画面でも「目安」と断っている。
+
+        不快指数と同じく、温度と湿度の**どちらかが欠けていれば出さない**。
+        片方だけで熱中症リスクを名乗るのは、外し方が危険な側に出る。
+        """
+        if self.temperature is None or self.humidity is None:
+            return None
+        t, h = self.temperature, self.humidity
+        return 0.735 * t + 0.0374 * h + 0.00292 * t * h - 4.064
+
+    @property
+    def heat_level(self) -> str:
+        """熱中症リスクの段階。
+
+        区切りは日本生気象学会「日常生活における熱中症予防指針」に合わせる。
+        独自の基準を作らないのは、外で見聞きする「厳重警戒」などの言葉と
+        画面の表示が食い違うと、かえって判断を誤らせるため。
+        """
+        value = self.wbgt
+        if value is None:
+            return "unknown"
+        if value < 21:
+            return "safe"
+        if value < 25:
+            return "caution"
+        if value < 28:
+            return "warn"
+        if value < 31:
+            return "severe"
+        return "danger"
+
+    @property
+    def heat_icon(self) -> str:
+        """段階に対応するアイコンの種類。
+
+        盾 → 三角 → 八角 → サイレン、と形が変わる。色だけで区別すると
+        色が見分けにくい人に伝わらず、並べたときの視線の引き方も弱い。
+        """
+        return {
+            "safe": "shield-check",
+            "caution": "shield-alert",
+            "warn": "triangle-alert",
+            "severe": "octagon-alert",
+            "danger": "siren",
+            "unknown": "none",
+        }[self.heat_level]
+
+    @property
+    def heat_text(self) -> str:
+        """段階の言い換え。アイコンだけでは意味が伝わらないため、
+        吹き出しと読み上げにはこの文字を出す。"""
+        value = self.wbgt
+        label = {
+            "safe": "ほぼ安全",
+            "caution": "注意",
+            "warn": "警戒",
+            "severe": "厳重警戒",
+            "danger": "危険",
+            "unknown": "—",
+        }[self.heat_level]
+        if value is None:
+            return f"熱中症リスク {label}"
+        return f"熱中症リスク {label}（暑さ指数の目安 {value:.0f}）"
+
+    @property
     def temperature_level(self) -> str:
         """温度の段階。色を決めるのに使う。
 
