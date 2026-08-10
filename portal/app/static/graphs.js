@@ -337,11 +337,65 @@ function nearestPoint(points, t) {
   return Math.abs(after.t - t) < Math.abs(before.t - t) ? after : before;
 }
 
+/** 系列ごとの最新の値。線の右端に出すラベルに使う。 */
+function latestOf(series, key) {
+  const found = [];
+  for (const s of series) {
+    const usable = s.points.filter((p) => p[key] !== null && p[key] !== undefined);
+    if (usable.length === 0) continue;
+    found.push({ deviceId: s.device_id, point: usable[usable.length - 1] });
+  }
+  return found;
+}
+
+function formatValue(value, unit) {
+  return `${Math.round(value * 10) / 10}${unit}`;
+}
+
+/** 重なったラベルを縦にずらす。
+ *
+ * 同時表示だと最新の値が近い系列どうしで文字が重なり、どちらも読めなくなる。
+ * 上から順に見て、詰まっているものを下へ押しやる。押し切って下枠を越えたら
+ * 全体を上へ戻す（枠外に出すと切れて読めない）。
+ */
+function spreadLabels(labels, minGap, top, bottom) {
+  labels.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < labels.length; i++) {
+    if (labels[i].y - labels[i - 1].y < minGap) {
+      labels[i].y = labels[i - 1].y + minGap;
+    }
+  }
+  const overflow = labels.length ? labels[labels.length - 1].y - bottom : 0;
+  if (overflow > 0) {
+    for (const label of labels) label.y -= overflow;
+  }
+  if (labels.length && labels[0].y < top) {
+    const shift = top - labels[0].y;
+    for (const label of labels) label.y += shift;
+  }
+  return labels;
+}
+
 function buildChart(series, key, unit) {
   const width = chartWidth();
   const height = 260;
   const narrow = width < 480;
-  const pad = { top: 12, right: narrow ? 10 : 16, bottom: 28, left: narrow ? 38 : 46 };
+
+  // 最新の値は線の右端に文字で出す。グラフを見て最初に知りたいのは
+  // 「今いくつか」で、それがカーソルを乗せないと分からないのは遠回り。
+  // そのぶんの幅を右に確保してから座標を決める。
+  const latest = latestOf(series, key);
+  const labelChars = Math.max(
+    0, ...latest.map((l) => formatValue(l.point[key], unit).length)
+  );
+  const labelRoom = labelChars ? labelChars * 6.6 + 10 : 0;
+
+  const pad = {
+    top: 12,
+    right: (narrow ? 10 : 16) + labelRoom,
+    bottom: 28,
+    left: narrow ? 38 : 46,
+  };
 
   const points = series.flatMap((s) =>
     s.points.filter((p) => p[key] !== null && p[key] !== undefined)
@@ -432,6 +486,26 @@ function buildChart(series, key, unit) {
     svg.appendChild(el("circle", {
       cx: x(last.t), cy: y(last[key]), r: 3, fill: color(s.device_id),
     }));
+  }
+
+  // 最新の値。線と同じ色にして、どの線の値かが分かるようにする。
+  for (const label of spreadLabels(
+    latest.map((l) => ({
+      deviceId: l.deviceId,
+      x: x(l.point.t),
+      y: y(l.point[key]) + 4,   // 文字の中心を点に合わせる
+      text: formatValue(l.point[key], unit),
+    })),
+    13, pad.top + 10, height - pad.bottom,
+  )) {
+    const text = el("text", {
+      x: label.x + 7,
+      y: label.y,
+      class: "latest-value",
+      fill: color(label.deviceId),
+    });
+    text.textContent = label.text;
+    svg.appendChild(text);
   }
 
   // --- ポイントしたところの値を出す ---------------------------------------

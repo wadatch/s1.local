@@ -1143,6 +1143,15 @@ table.sensors form { margin: 0; }
   font-family: system-ui, sans-serif;
 }
 
+/* 線の右端に出す最新の値。色は線に合わせるので fill は JS が付ける。
+   目盛りより少し強くする（グラフを見て最初に読む数字なので）。 */
+.chart .latest-value {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
 /* --- ポイントしたところの値 ---------------------------------------------- */
 
 .chart .guide {
