@@ -49,6 +49,31 @@
 	redir /grafana http://{host}:3000
 	redir /prometheus http://{host}:9090
 
+	# --- Forgejo --------------------------------------------------------
+	#
+	# こちらは本物のリバースプロキシ。「これから立てるものは最初から
+	# サブパス配信にする」という上の方針どおり、Forgejo 側の ROOT_URL に
+	# /git/ を持たせてある。
+	#
+	# **パスは剥がして渡す。** Forgejo 自身はルートで道を張っていて
+	# （`/user/login` が 200、`/git/user/login` は 404）、ROOT_URL は
+	# 生成する URL に /git/ を付けるためだけに使われる。
+	#
+	# 起動ログに `Listen: http://0.0.0.0:3000/git` と出るので剥がさない
+	# ように見えるが、これは表示上のもの。実際に両方の形を叩いて確かめた。
+	#
+	# git clone も push もこの経路を通る。大きなリポジトリで切れないよう、
+	# 待ち時間を長めに取っている。
+	redir /git /git/
+	handle_path /git/* {
+		reverse_proxy forgejo:3000 {
+			transport http {
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
 	# --- ポータル本体 ---------------------------------------------------
 	reverse_proxy portal-app:8000
 }

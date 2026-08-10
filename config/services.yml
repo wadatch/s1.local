@@ -12,7 +12,7 @@ categories:
   home: 家の状態
   monitoring: 監視
   infra: サーバ基盤
-  tools: 自作ツール
+  tools: 道具
 
 services:
   # -------------------------------------------------------------------------
@@ -253,6 +253,16 @@ services:
         query: 'count(up == 0) or vector(0)'
         format: count
         thresholds: {warn: 1, crit: 3}
+
+  # -------------------------------------------------------------------------
+  - id: forgejo
+    name: Forgejo
+    description: 自前の Git ホスティング。リポジトリ・Issue・Pull Request。clone と push は HTTPS で行う。
+    url: /git/
+    category: tools
+    health:
+      type: http
+      url: http://forgejo:3000/api/healthz
 
   # -------------------------------------------------------------------------
   - id: s1-host

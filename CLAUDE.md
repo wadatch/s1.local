@@ -35,6 +35,7 @@ Python コードは触らない。コンテナの再起動もしない。
 | `portal-node-exporter` | s1 自身の CPU / メモリ / ディスク / 温度 |
 | `portal-switchbot-exporter` | SwitchBot の温湿度センサー |
 | `portal-speed-exporter` | 有線・無線それぞれの回線速度 |
+| `portal-forgejo` | Git ホスティング。`/git/` で配信 |
 
 `portal-app` は `network-analyzer_default` ネットワークにも属している。
 これにより `na-prometheus` / `na-grafana` へ**コンテナ名で**到達でき、
@@ -96,8 +97,38 @@ Grafana と Prometheus だけは `reverse_proxy` ではなく `redir`（302）�
 かつ既存の `s1.local:3000` 直アクセスが壊れる）。
 
 **これから s1 に立てるものは、最初からサブパス配信に対応させること。**
-そうすれば `Caddyfile` に `handle_path /foo/* { reverse_proxy foo:8080 }` を
-足すだけで、ポート番号を意識しない本物の統合になる。
+そうすれば `caddy/Caddyfile` に `handle_path /foo/* { reverse_proxy foo:8080 }` を
+足すだけで、ポート番号を意識しない本物の統合になる。Forgejo がその形。
+
+### Forgejo（`/git/`）
+
+Git ホスティング。**この方針で最初に立てたサービス**なので、追加するときの
+手本になる。
+
+- `ROOT_URL` に `/git/` を持たせ、Caddy は `handle_path` で **パスを剥がして**渡す。
+  Forgejo 自身はルートで道を張っていて（`/user/login` が 200、`/git/user/login`
+  は 404）、`ROOT_URL` は生成する URL に `/git/` を付けるためだけに使われる。
+  起動ログに `Listen: http://0.0.0.0:3000/git` と出るので剥がさないように
+  見えるが、これは表示上のもの。両方の形を実際に叩いて確かめた
+- **`ROOT_URL` は 1 つしか持てない。** ts.net 側にしてあるので、
+  `http://s1.local/git/` でも開けるが、画面のリンクと clone URL は ts.net になる
+- **データは `/srv/forgejo`。`~/s1.local` の中に置いてはいけない。**
+  `make deploy` が `rsync --delete` するので消える
+- SSH は使わない（`DISABLE_SSH`）。clone / push は HTTPS で行う
+- 最初に登録した利用者が管理者になる。作り終えたら `.env` の
+  `FORGEJO_DISABLE_REGISTRATION` を `true` にして `make up`
+
+### 設定ファイルはディレクトリごと渡す
+
+`caddy/Caddyfile` をディレクトリ単位でマウントしているのには理由がある。
+
+**rsync はファイルを置き換える（inode が変わる）ため、単一ファイルの
+バインドマウントだとコンテナが古い中身を見続ける。** 実際に「配備したのに
+設定が反映されない」で時間を溶かした。ディレクトリでマウントすれば起きない。
+
+**Caddy は Caddyfile を読み直さない。** バインドマウントを書き換えても
+コンテナは作り直されないので、`make deploy` で明示的に
+`caddy reload` を投げている。これを外すと同じ事故が再発する。
 
 ### 値の色分けの向き
 
