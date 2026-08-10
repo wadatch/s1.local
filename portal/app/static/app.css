@@ -1031,6 +1031,104 @@ table.sensors form { margin: 0; }
   color: #fff;
 }
 
+/* --- 名前をつけた表示条件 ------------------------------------------------ */
+
+.presets-row {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.presets-empty {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 呼び出しと削除を 1 つの塊に見せる。並んだ × がどれのものか迷わないため。 */
+.preset {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.preset-apply,
+.preset-delete {
+  font: inherit;
+  font-size: 0.8rem;
+  border: none;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+}
+
+.preset-apply:hover { color: var(--text); }
+
+.preset-delete {
+  padding: 4px 8px;
+  border-left: 1px solid var(--border);
+  line-height: 1;
+}
+
+.preset-delete:hover { color: var(--crit); }
+
+/* 今その条件を見ているものは塗る。段の中でどれが効いているか分かる。 */
+.preset-active { border-color: var(--accent); }
+
+.preset-active .preset-apply {
+  background: var(--accent);
+  color: #fff;
+}
+
+.preset-save {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.preset-save input {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 15em;
+}
+
+.preset-save input::placeholder { color: var(--text-muted); }
+.preset-save input:focus { outline: 1px solid var(--accent); }
+
+.preset-save button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.preset-save button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 560px) {
+  .preset-save { width: 100%; }
+  .preset-save input { min-width: 0; flex: 1; }
+}
+
 .picker {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

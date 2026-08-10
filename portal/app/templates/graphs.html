@@ -80,6 +80,22 @@
 
 </form>
 
+{# よく見る組み合わせは名前をつけて残せる。センサーを選び直すのが毎回同じ
+   手間になるため（「夏の南棟だけ」「寝室の 7 日」など）。
+   保存先はこのブラウザ。端末ごとに見たいものが違うので、サーバに置く意味がない。 #}
+<div class="control-row presets-row">
+  <span class="control-label">保存</span>
+
+  <div class="presets" id="presets"></div>
+
+  <form class="preset-save" id="preset-save">
+    <input type="text" id="preset-name" maxlength="24" autocomplete="off"
+           placeholder="今の条件に名前をつけて保存">
+    <button type="submit">保存</button>
+  </form>
+</div>
+
+
 <div class="picker">
   {% for group in groups %}
   <fieldset class="picker-home">

@@ -407,6 +407,21 @@ def test_グラフページの表示条件が畳める(make_app):
     assert 'class="picker"' in body
 
 
+def test_グラフページで表示条件に名前をつけて保存できる(make_app):
+    """よく見る組み合わせを毎回選び直さずに済むこと。
+
+    保存先はこのブラウザ（localStorage）。端末ごとに見たいものが違うので、
+    サーバに置く意味がない。ここでは置き場と入口があることだけを見る。
+    """
+    main_module, _ = make_app("services: []\n")
+    with TestClient(main_module.app) as client:
+        body = client.get("/graphs").text
+
+    assert 'id="presets"' in body, "保存したものを並べる場所"
+    assert 'id="preset-save"' in body, "名前をつけて保存する入口"
+    assert 'id="preset-name"' in body
+
+
 def test_healthz(make_app):
     main_module, _ = make_app(BASIC_YAML)
     with TestClient(main_module.app) as client:

@@ -72,8 +72,12 @@ function applySegmented(id, key, value) {
   return true;
 }
 
-function restoreSelection() {
-  const saved = loadSelection();
+/** 保存してある条件を画面に当てる。前回の続きと、名前をつけた条件の両方で使う。
+ *
+ * 戻り値は「センサーを 1 台でも当てられたか」。保存したセンサーが今も居るとは
+ * 限らない（取得を止めた・撤去した）ので、居ないものは黙って飛ばす。
+ */
+function applySelection(saved) {
   if (!saved) return false;
 
   if (typeof saved.hours === "number" && applySegmented("range-buttons", "hours", saved.hours)) {
@@ -86,8 +90,10 @@ function restoreSelection() {
     state.metric = saved.metric;
   }
 
-  // 保存したセンサーが今も居るとは限らない（取得を止めた・撤去した）。
-  // 居ないものは黙って飛ばす。
+  // 今の選択を消してから当てる。当てる側に無いセンサーが残ると、
+  // 「保存したときの条件」と画面が食い違う。
+  document.querySelectorAll(".device-check").forEach((box) => { box.checked = false; });
+
   let restored = 0;
   for (const id of saved.devices || []) {
     const box = document.querySelector(`.device-check[value="${CSS.escape(id)}"]`);
@@ -97,6 +103,10 @@ function restoreSelection() {
     }
   }
   return restored > 0;
+}
+
+function restoreSelection() {
+  return applySelection(loadSelection());
 }
 
 // --- 選択 -----------------------------------------------------------------
@@ -135,6 +145,143 @@ function paintSwatches() {
   });
 }
 
+// --- 名前をつけた表示条件 ---------------------------------------------------
+//
+// よく見る組み合わせを残しておくためのもの。センサーを選び直すのが毎回同じ
+// 手間になるため（「夏の南棟だけ」「寝室の 7 日」など）。
+//
+// 保存先はこのブラウザ。端末ごとに見たいものが違うので、サーバに置く意味がない。
+// 前回の続き（STORAGE_KEY）とは別にしてある。前回の続きは黙って上書きされる
+// ものなので、名前をつけて残したものを同じ場所に置くと消える。
+
+const PRESETS_KEY = "s1-portal.graphs.presets.v1";
+
+function loadPresets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRESETS_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter((p) => p && typeof p.name === "string") : [];
+  } catch {
+    return [];   // 読めなくてもグラフ自体は動く
+  }
+}
+
+function storePresets(presets) {
+  try {
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(presets));
+  } catch {
+    // 保存できなくても表示には影響しない
+  }
+}
+
+/** 今の条件が、保存済みのどれかと同じか。同じなら名前を返す。 */
+function matchingPresetName() {
+  const now = {
+    hours: state.hours,
+    layout: state.layout,
+    metric: state.metric,
+    devices: selectedDevices().map((d) => d.id).sort(),
+  };
+  const found = loadPresets().find((p) =>
+    p.hours === now.hours &&
+    p.layout === now.layout &&
+    p.metric === now.metric &&
+    JSON.stringify([...(p.devices || [])].sort()) === JSON.stringify(now.devices)
+  );
+  return found ? found.name : null;
+}
+
+function renderPresets() {
+  const box = document.getElementById("presets");
+  if (!box) return;
+
+  const presets = loadPresets();
+  box.innerHTML = "";
+
+  if (presets.length === 0) {
+    const empty = document.createElement("span");
+    empty.className = "presets-empty";
+    empty.textContent = "まだありません";
+    box.appendChild(empty);
+    return;
+  }
+
+  const active = matchingPresetName();
+
+  for (const preset of presets) {
+    const chip = document.createElement("span");
+    chip.className = "preset" + (preset.name === active ? " preset-active" : "");
+
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "preset-apply";
+    apply.textContent = preset.name;
+    apply.title = `${preset.name} の条件にする（センサー ${(preset.devices || []).length} 台）`;
+    apply.addEventListener("click", () => {
+      applySelection(preset);
+      load();
+    });
+    chip.appendChild(apply);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "preset-delete";
+    remove.textContent = "×";
+    remove.title = `${preset.name} を消す`;
+    remove.setAttribute("aria-label", `${preset.name} を消す`);
+    remove.addEventListener("click", () => {
+      // 消すのは戻せないので一度止める。押し間違いで消えると、
+      // 何を保存していたか思い出せない。
+      if (!confirm(`「${preset.name}」を消しますか。`)) return;
+      storePresets(loadPresets().filter((p) => p.name !== preset.name));
+      renderPresets();
+    });
+    chip.appendChild(remove);
+
+    box.appendChild(chip);
+  }
+}
+
+function wirePresetSave() {
+  const form = document.getElementById("preset-save");
+  const input = document.getElementById("preset-name");
+  if (!form || !input) return;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const name = input.value.trim();
+    if (!name) {
+      input.focus();
+      return;
+    }
+
+    if (selectedDevices().length === 0) {
+      showRefreshNote("センサーを選んでから保存してください");
+      return;
+    }
+
+    const presets = loadPresets();
+    const existing = presets.findIndex((p) => p.name === name);
+    // 同じ名前は上書き。別物として 2 つ残ると、どちらが新しいか分からない。
+    if (existing >= 0 && !confirm(`「${name}」を今の条件で上書きしますか。`)) return;
+
+    const entry = {
+      name,
+      hours: state.hours,
+      layout: state.layout,
+      metric: state.metric,
+      devices: selectedDevices().map((d) => d.id),
+    };
+    if (existing >= 0) presets[existing] = entry;
+    else presets.push(entry);
+
+    storePresets(presets);
+    input.value = "";
+    renderPresets();
+    renderControlsSummary();
+  });
+}
+
 /** 選ばれているボタンの文字。表示条件の要約に使う。 */
 function activeLabel(id) {
   const button = document.querySelector(`#${id} button.active`);
@@ -150,7 +297,9 @@ function renderControlsSummary() {
   const el = document.getElementById("controls-summary");
   if (!el) return;
   const count = selectedDevices().length;
+  const preset = matchingPresetName();
   el.textContent = [
+    preset ? `「${preset}」` : "",
     activeLabel("range-buttons"),
     activeLabel("metric-buttons"),
     count ? `${count} 台` : "センサー未選択",
@@ -175,6 +324,8 @@ async function load(manual) {
   paintSwatches();
   saveSelection();
   renderControlsSummary();
+  // どの条件を見ているかが分かるよう、一致するものに印を付け直す。
+  renderPresets();
 
   const charts = document.getElementById("charts");
 
@@ -667,6 +818,9 @@ document.addEventListener("change", (event) => {
 
 // 前回の選択があればそれを再現する。無ければ最初のホームを選んだ状態で出す
 // （空のページより意図が伝わる）。
+wirePresetSave();
+renderPresets();
+
 if (!restoreSelection()) {
   const firstHome = document.querySelector(".home-check");
   if (firstHome) {
