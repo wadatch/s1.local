@@ -32,7 +32,7 @@ ps:
 
 check:
 	docker compose config --quiet
-	docker run --rm -v "$(CURDIR)/Caddyfile:/etc/caddy/Caddyfile:ro" \
+	docker run --rm -v "$(CURDIR)/caddy:/etc/caddy:ro" \
 		-e TS_HOSTNAME=example.ts.net caddy:2.9-alpine caddy validate --config /etc/caddy/Caddyfile
 	docker build -q -t s1-portal/portal:local ./portal >/dev/null
 	docker run --rm -v "$(CURDIR)/config:/app/config:ro" s1-portal/portal:local \
@@ -56,4 +56,8 @@ deploy:
 		./ $(DEPLOY_HOST):$(DEPLOY_PATH)/
 	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_PATH) && [ -f .env ] || cp .env.example .env'
 	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_PATH) && docker compose up -d --build'
+	# Caddyfile はバインドマウントなので、書き換えてもコンテナは作り直されず、
+	# Caddy 自身も読み直さない。配備しても反映されない事故になるので明示的に読ませる。
+	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_PATH) && docker compose exec -T caddy \
+		caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile'
 	ssh $(DEPLOY_HOST) 'cd $(DEPLOY_PATH) && docker compose ps'

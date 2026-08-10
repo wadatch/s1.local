@@ -7,7 +7,11 @@ services:
     depends_on:
       - portal
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # ★ ファイル単体ではなくディレクトリでマウントする。
+      #   rsync はファイルを置き換える（inode が変わる）ので、単一ファイルの
+      #   バインドマウントだとコンテナが古い中身を見続ける。実際に
+      #   「配備したのに設定が反映されない」が起きた。
+      - ./caddy:/etc/caddy:ro
       - caddy-data:/data
       - caddy-config:/config
       # Tailscale から HTTPS 証明書を受け取るための LocalAPI ソケット。
@@ -94,6 +98,50 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  forgejo:
+    image: codeberg.org/forgejo/forgejo:12
+    container_name: portal-forgejo
+    restart: unless-stopped
+    volumes:
+      # ★ データは ~/s1.local の外に置く。make deploy が rsync --delete で
+      #   配備先を同期するので、中に置くと配備のたびに消える。
+      - ${FORGEJO_DATA:-/srv/forgejo}:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      USER_UID: ${FORGEJO_UID:-1000}
+      USER_GID: ${FORGEJO_GID:-1000}
+
+      # サブパス配信。Caddy が /git を剥がして渡すので、Forgejo 自身は
+      # ルートで動きつつ、生成する URL にだけ /git/ を付ける。
+      FORGEJO__server__ROOT_URL: ${FORGEJO_ROOT_URL:-https://s1.tail981a3e.ts.net/git/}
+      FORGEJO__server__HTTP_PORT: "3000"
+
+      # SSH は使わない。ホストの 22 番は既存の sshd が使っており、
+      # 別ポートを開けるより HTTPS だけで完結させるほうが単純。
+      FORGEJO__server__DISABLE_SSH: "true"
+      FORGEJO__server__START_SSH_SERVER: "false"
+
+      # 家庭内の 1 インスタンスに RDB を別に立てる必要はない。
+      FORGEJO__database__DB_TYPE: sqlite3
+      FORGEJO__database__PATH: /data/forgejo.db
+
+      # 初期設定画面を出さない。代わりに **最初に登録した利用者が管理者**になる。
+      # 管理者を作ったら .env の FORGEJO_DISABLE_REGISTRATION を true にして
+      # `make up` すると、以後は登録を閉じられる。
+      FORGEJO__security__INSTALL_LOCK: "true"
+      FORGEJO__service__DISABLE_REGISTRATION: ${FORGEJO_DISABLE_REGISTRATION:-false}
+      # 家庭内なので、中身はログインしないと見えないようにしておく。
+      FORGEJO__service__REQUIRE_SIGNIN_VIEW: ${FORGEJO_REQUIRE_SIGNIN:-true}
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
 
   speed-exporter:
     build: ./speed-exporter
