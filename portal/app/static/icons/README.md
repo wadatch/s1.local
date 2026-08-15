@@ -13,12 +13,22 @@ CDN から読むと、**回線が落ちているときにアイコンが出な�
 ## なぜ Lucide を選んだか
 
 電池の状態が **charging / full / medium / low / warning** と過不足なく揃って
-いるのが決め手。1 個 300〜400 バイトで、`stroke="currentColor"` なので
+いるのが決め手。1 個 300〜500 バイトで、`stroke="currentColor"` なので
 CSS のマスクとして使えば色をテーマに追従させられる。
+
+## 置いてあるもの
+
+| 用途 | アイコン |
+|---|---|
+| 電池残量 | `battery-charging` / `battery-full` / `battery-medium` / `battery-low` / `battery-warning` |
+| 熱中症リスク | `shield-check` / `shield-alert` / `triangle-alert` / `octagon-alert` / `siren` |
+
+熱中症は **形が段階ごとに変わる**ものを選んでいる（盾 → 三角 → 八角 →
+サイレン）。色だけで区別すると、色を見分けにくい人に伝わらない。
 
 ## 使い方
 
-`app.css` の `.battery-icon` を参照。`mask-image` で読み、色は
+`app.css` の `.battery-icon` / `.heat-icon` を参照。`mask-image` で読み、色は
 `background-color: currentColor` で付ける。`<img>` で読むと色を変えられない。
 
 ## ライセンス

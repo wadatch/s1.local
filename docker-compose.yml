@@ -50,6 +50,9 @@ services:
       # speed-exporter は host ネットワークで動くのでコンテナ名では引けない。
       # ホストの IP を直接書くと DHCP で変わったときに黙って壊れるので使わない。
       SPEED_EXPORTER_URL: http://host.docker.internal:${SPEED_PORT:-9800}
+      # ヘッダに「HTTPS で開く」リンクを出すためだけに使う。
+      # caddy に渡しているものと同じ値。
+      TS_HOSTNAME: ${TS_HOSTNAME:-s1.tail981a3e.ts.net}
       HISTORY_DB: /data/history.db
       HISTORY_INTERVAL_SECONDS: ${HISTORY_INTERVAL_SECONDS:-120}
       HISTORY_KEEP_DAYS: ${HISTORY_KEEP_DAYS:-90}
@@ -151,8 +154,9 @@ services:
     environment:
       # name:interface を書いた順に測る。最初のものが基準のサーバを決める。
       SPEED_LINKS: ${SPEED_LINKS:-wired:eno1,wifi:wlp3s0}
-      # 1 回の測定で数百 MB を流す。頻繁に測ると回線を占有して通信量も食う。
-      SPEED_INTERVAL_SECONDS: ${SPEED_INTERVAL_SECONDS:-21600}
+      # 1 回の測定で数百 MB〜数 GB を流し、その間（約 50 秒）回線を占有する。
+      # 短くするほど通信量と占有時間が効いてくる。詳細は .env.example。
+      SPEED_INTERVAL_SECONDS: ${SPEED_INTERVAL_SECONDS:-1800}
       SPEED_PORT: ${SPEED_PORT:-9800}
     healthcheck:
       test: ["CMD", "python", "-c",

@@ -324,7 +324,7 @@ def main() -> None:
             "SPEED_LINKS が空です。'wired:eno1,wifi:wlp3s0' の形で指定してください。"
         )
 
-    interval = float(os.environ.get("SPEED_INTERVAL_SECONDS", "21600"))
+    interval = float(os.environ.get("SPEED_INTERVAL_SECONDS", "1800"))
     timeout = int(os.environ.get("SPEED_TIMEOUT_SECONDS", "150"))
     port = int(os.environ.get("SPEED_PORT", "9800"))
 

@@ -14,6 +14,14 @@
   <div class="wrap">
     <h1>🏠 s1.local</h1>
     <p class="tagline">我が家のサーバで動いているもの</p>
+    {% if secure_url %}
+    {# 自動では飛ばさない。Tailscale に入っていない端末はこの名前に到達できず、
+       リダイレクトするとポータル自体が開けなくなるため。移るかは開いた人が決める。 #}
+    <p class="secure-link">
+      <a href="{{ secure_url }}">🔒 HTTPS で開く</a>
+      <span class="secure-note">{{ secure_host }}（Tailscale 経由）</span>
+    </p>
+    {% endif %}
     <p class="updated">最終更新 <time id="updated-at">—</time></p>
   </div>
 </header>

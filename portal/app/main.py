@@ -37,6 +37,9 @@ SWITCHBOT_EXPORTER_URL = os.environ.get(
 # 重複はサンプル時刻の丸めで落ちるので短くしても行は増えない。
 HISTORY_INTERVAL = float(os.environ.get("HISTORY_INTERVAL_SECONDS", "120"))
 HISTORY_KEEP_DAYS = float(os.environ.get("HISTORY_KEEP_DAYS", "90"))
+# HTTPS で開ける Tailscale の名前。ヘッダにそこへのリンクを出すためだけに使う。
+# 空なら出さない（Tailscale を使っていない環境で死んだリンクを出さないため）。
+TS_HOSTNAME = os.environ.get("TS_HOSTNAME", "").strip()
 
 log = logging.getLogger("portal")
 
@@ -441,6 +444,21 @@ async def sensors_toggle_home(
     return _toggle_response(f"{home} の {len(targets)} 台の取得を止めました。")
 
 
+def _secure_url(request: Request) -> str | None:
+    """HTTPS で開ける入口への URL。すでにそこにいるなら None。
+
+    `s1.local` には公的な証明書を発行できないので、鍵マークの付く入口は
+    Tailscale の名前だけになる。自動でリダイレクトはしない（Tailscale に
+    入っていない端末は ts.net 名に到達できず、飛ばすと開けなくなる）。
+    移るかどうかは開いた人に委ね、リンクとして出すにとどめる。
+    """
+    if not TS_HOSTNAME:
+        return None
+    if request.url.hostname == TS_HOSTNAME:
+        return None
+    return f"https://{TS_HOSTNAME}{request.url.path}"
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request) -> HTMLResponse:
     status = await status_cache.get(_build_status)
@@ -461,5 +479,10 @@ async def index(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={"status": status, "by_category": by_category},
+        context={
+            "status": status,
+            "by_category": by_category,
+            "secure_url": _secure_url(request),
+            "secure_host": TS_HOSTNAME,
+        },
     )

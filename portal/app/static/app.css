@@ -87,6 +87,29 @@ body {
   font-size: 0.9rem;
 }
 
+/* HTTPS の入口へのリンク。HTTP で開いているときだけ出る。 */
+.secure-link {
+  margin: 10px 0 0;
+  font-size: 0.82rem;
+}
+
+.secure-link a {
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 9px;
+}
+
+.secure-link a:hover {
+  border-color: var(--accent);
+}
+
+.secure-note {
+  margin-left: 8px;
+  color: var(--text-muted);
+}
+
 .updated {
   margin: 10px 0 0;
   color: var(--text-muted);
@@ -407,6 +430,27 @@ code {
 
 .breadcrumb a:hover { color: var(--accent); }
 
+/* 別ページへの案内。breadcrumb の小さな文字だと見落とされるので、
+   移ってほしい先はボタンの形で出す。 */
+.page-links {
+  margin: 12px 0 0;
+}
+
+.page-link {
+  display: inline-block;
+  font-size: 0.84rem;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  padding: 6px 14px;
+}
+
+.page-link:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* 横に長い表はページ全体ではなく表の中だけをスクロールさせる。 */
 .table-scroll {
   overflow-x: auto;
@@ -520,6 +564,50 @@ table.sensors .strong {
   mask-image: url("/static/icons/battery-charging.svg");
 }
 
+/* 熱中症リスク。電池と同じ作りだが、段階ごとに**形**が変わる。
+   色だけで区別すると、色を見分けにくい人には何も伝わらない。 */
+.heat-icon {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  vertical-align: -4px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+.heat-icon[data-heat="shield-check"] {
+  -webkit-mask-image: url("/static/icons/shield-check.svg");
+  mask-image: url("/static/icons/shield-check.svg");
+}
+
+.heat-icon[data-heat="shield-alert"] {
+  -webkit-mask-image: url("/static/icons/shield-alert.svg");
+  mask-image: url("/static/icons/shield-alert.svg");
+}
+
+.heat-icon[data-heat="triangle-alert"] {
+  -webkit-mask-image: url("/static/icons/triangle-alert.svg");
+  mask-image: url("/static/icons/triangle-alert.svg");
+}
+
+.heat-icon[data-heat="octagon-alert"] {
+  -webkit-mask-image: url("/static/icons/octagon-alert.svg");
+  mask-image: url("/static/icons/octagon-alert.svg");
+}
+
+.heat-icon[data-heat="siren"] {
+  -webkit-mask-image: url("/static/icons/siren.svg");
+  mask-image: url("/static/icons/siren.svg");
+}
+
+/* 値が無いときは形を出さない。空欄に「—」だけが残る。 */
+.heat-icon[data-heat="none"] { display: none; }
+
 /* --- 値の色分け ----------------------------------------------------------
    一覧を眺めたときに、暑い部屋・乾いた部屋・電池が減っているセンサーが
    数字を読まずに目に入ること。青いほど冷たい／湿っている、赤いほど暑い、
@@ -539,6 +627,16 @@ td.hum-humidish { color: var(--cool); }
 td.hum-humid { color: var(--cold); }
 td.hum-unknown { color: var(--unknown); }
 
+/* 熱中症リスク。温度と同じ向き（赤いほど危ない）。
+   「ほぼ安全」にも緑を付ける。付けないと危ない赤・黄だけが浮いて、
+   色の付いた行＝異常、と読めてしまう（電池と同じ理由）。 */
+td.heat-safe { color: var(--ok); }
+td.heat-caution { color: var(--warn); opacity: 0.75; }
+td.heat-warn { color: var(--warn); }
+td.heat-severe { color: var(--crit); opacity: 0.8; }
+td.heat-danger { color: var(--crit); }
+td.heat-unknown { color: var(--unknown); }
+
 /* 不快指数は温度と同じ向き（青い＝寒い、赤い＝暑い）。
    85 以上は「暑くてたまらない」なので、色だけでなく太字でも差をつける。 */
 td.di-cold { color: var(--cold); }
@@ -550,6 +648,40 @@ td.di-severe { color: var(--crit); font-weight: 700; }
 td.di-unknown { color: var(--unknown); }
 
 /* 色の見本。td 以外でも同じ色が出るようにしておく。 */
+/* 説明は「色の凡例」と「列の意味」の 2 つだけ。どちらも見出しと中身の
+   組なので dl で組み、見出しを左に揃えて拾い読みできるようにする。 */
+.note dt {
+  grid-column: 1;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.note dd {
+  grid-column: 2;
+  margin: 0;
+}
+
+.colour-key,
+.terms {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  align-items: baseline;
+}
+
+/* 狭い画面では 2 段組をやめて縦に積む。 */
+@media (max-width: 560px) {
+  .colour-key,
+  .terms {
+    grid-template-columns: 1fr;
+    gap: 1px 0;
+  }
+
+  .note dt { margin-top: 8px; }
+  .note dt,
+  .note dd { grid-column: 1; }
+}
+
 .colour-key .key {
   font-weight: 600;
   margin-right: 6px;
@@ -566,6 +698,20 @@ td.di-unknown { color: var(--unknown); }
 .key.di-comfort { color: var(--ok); }
 .key.di-warm { color: var(--warn); }
 .key.di-hot { color: var(--crit); }
+.key.heat-safe { color: var(--ok); }
+.key.heat-caution { color: var(--warn); opacity: 0.75; }
+.key.heat-warn { color: var(--warn); }
+.key.heat-severe { color: var(--crit); opacity: 0.8; }
+.key.heat-danger { color: var(--crit); }
+
+/* 凡例の中のアイコンは、文字と並ぶので少し小さく。 */
+.key .heat-icon {
+  width: 15px;
+  height: 15px;
+  vertical-align: -2px;
+  margin-right: 3px;
+}
+
 .key.bat-ok { color: var(--ok); }
 .key.bat-warn { color: var(--warn); }
 .key.bat-crit { color: var(--crit); }
@@ -721,41 +867,126 @@ table.sensors form { margin: 0; }
 
 .home { margin-bottom: 36px; }
 
+/* ホームの見出しは折りたたみの取っ手を兼ねる。
+   既定の三角は消して、開閉の向きが分かる印を自分で出す。 */
 .home-head {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 10px;
-  flex-wrap: wrap;
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
 }
+
+.home-head::-webkit-details-marker { display: none; }
+
+.home-head::before {
+  content: "▾";
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.12s ease;
+}
+
+.home:not([open]) > .home-head::before { transform: rotate(-90deg); }
+
+.home-head:hover h2 { color: var(--accent); }
 
 .home-head h2 {
   margin: 0;
   font-size: 1.15rem;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .home-count {
-  flex: 1;
   font-size: 0.78rem;
+  font-weight: normal;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.home-head form { margin: 0; }
+/* 「まとめて」は summary の外。中に置くと、押すだけで開閉も動いてしまう。 */
+.home-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.home-actions form { margin: 0; }
+
+.home-graph-link {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.home-graph-link:hover { color: var(--accent); }
 
 .toggle-home {
   border-radius: 6px;
   padding: 4px 12px;
 }
 
-/* --- グラフページ -------------------------------------------------------- */
+/* --- 折りたためる枠（グラフページの表示条件）------------------------------ */
 
-.controls {
+.panel {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px 16px;
   margin-bottom: 16px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 11px 16px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel-head::-webkit-details-marker { display: none; }
+
+.panel-head::before {
+  content: "▾";
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.12s ease;
+}
+
+.panel:not([open]) > .panel-head::before { transform: rotate(-90deg); }
+
+.panel-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.panel-head:hover .panel-title { color: var(--accent); }
+
+/* 畳んでいる間、何を見ているかはここだけが伝える。 */
+.panel-summary {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.panel-body {
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--border);
+}
+
+/* --- グラフページ -------------------------------------------------------- */
+
+/* 枠は .panel が持つので、中の controls は枠を持たない。 */
+.controls {
+  padding: 14px 0 0;
+  margin-bottom: 14px;
   display: grid;
   gap: 10px;
 }
@@ -800,11 +1031,108 @@ table.sensors form { margin: 0; }
   color: #fff;
 }
 
+/* --- 名前をつけた表示条件 ------------------------------------------------ */
+
+.presets-row {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.presets-empty {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* 呼び出しと削除を 1 つの塊に見せる。並んだ × がどれのものか迷わないため。 */
+.preset {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.preset-apply,
+.preset-delete {
+  font: inherit;
+  font-size: 0.8rem;
+  border: none;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 10px;
+}
+
+.preset-apply:hover { color: var(--text); }
+
+.preset-delete {
+  padding: 4px 8px;
+  border-left: 1px solid var(--border);
+  line-height: 1;
+}
+
+.preset-delete:hover { color: var(--crit); }
+
+/* 今その条件を見ているものは塗る。段の中でどれが効いているか分かる。 */
+.preset-active { border-color: var(--accent); }
+
+.preset-active .preset-apply {
+  background: var(--accent);
+  color: #fff;
+}
+
+.preset-save {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+}
+
+.preset-save input {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  min-width: 15em;
+}
+
+.preset-save input::placeholder { color: var(--text-muted); }
+.preset-save input:focus { outline: 1px solid var(--accent); }
+
+.preset-save button {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.preset-save button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 560px) {
+  .preset-save { width: 100%; }
+  .preset-save input { min-width: 0; flex: 1; }
+}
+
 .picker {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
-  margin-bottom: 20px;
 }
 
 .picker-home {
@@ -911,6 +1239,15 @@ table.sensors form { margin: 0; }
   fill: var(--text-muted);
   font-size: 10px;
   font-family: system-ui, sans-serif;
+}
+
+/* 線の右端に出す最新の値。色は線に合わせるので fill は JS が付ける。
+   目盛りより少し強くする（グラフを見て最初に読む数字なので）。 */
+.chart .latest-value {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- ポイントしたところの値 ---------------------------------------------- */

@@ -175,6 +175,86 @@ def test_不快指数の言い換え():
     assert s.discomfort_text == "快適"
 
 
+# --- 熱中症リスク ----------------------------------------------------------
+
+def test_暑さ指数を推定できる():
+    """WBGT ≒ 0.735T + 0.0374H + 0.00292TH − 4.064（小野・登内 2014）"""
+    s = Sensor("x", "x", "x", temperature=30.0, humidity=60.0)
+    expected = 0.735 * 30 + 0.0374 * 60 + 0.00292 * 30 * 60 - 4.064
+    assert s.wbgt == pytest.approx(expected)
+
+
+def test_同じ温度でも湿度で熱中症リスクが変わる():
+    """温度だけで熱中症を語れないことが、この指標を出す理由。"""
+    dry = Sensor("x", "x", "x", temperature=31.0, humidity=30.0)
+    humid = Sensor("x", "x", "x", temperature=31.0, humidity=80.0)
+    # 同じ 31℃ でも、湿度 30% なら「注意」、80% なら「厳重警戒」
+    assert dry.heat_level == "caution"
+    assert humid.heat_level == "severe"
+
+
+@pytest.mark.parametrize("temperature, humidity", [(None, 50.0), (33.0, None), (None, None)])
+def test_片方でも欠けていれば熱中症リスクは出さない(temperature, humidity):
+    """片方だけで熱中症リスクを名乗ると、外し方が危険な側に出る。"""
+    s = Sensor("x", "x", "x", temperature=temperature, humidity=humidity)
+    assert s.wbgt is None
+    assert s.heat_level == "unknown"
+    assert s.heat_icon == "none"
+
+
+@pytest.mark.parametrize(
+    "temperature, humidity, expected",
+    [
+        (20.0, 50.0, "safe"),       # WBGT 約 15
+        (28.0, 50.0, "caution"),    # WBGT 約 23
+        (30.0, 70.0, "warn"),       # WBGT 約 27
+        (33.0, 70.0, "severe"),     # WBGT 約 30
+        (35.0, 70.0, "danger"),     # WBGT 約 31
+    ],
+)
+def test_熱中症リスクの段階(temperature, humidity, expected):
+    """区切りは日本生気象学会「日常生活における熱中症予防指針」に合わせる。
+    独自基準にすると、外で見聞きする「厳重警戒」と画面が食い違う。"""
+    s = Sensor("x", "x", "x", temperature=temperature, humidity=humidity)
+    assert s.heat_level == expected
+
+
+def test_熱中症リスクは段階ごとに形の違うアイコンになる():
+    """色だけで区別すると、色を見分けにくい人に何も伝わらない。"""
+    levels = ["safe", "caution", "warn", "severe", "danger"]
+    icons = {
+        Sensor("x", "x", "x", temperature=t, humidity=h).heat_icon
+        for t, h in [(20.0, 50.0), (28.0, 50.0), (30.0, 70.0), (33.0, 70.0), (35.0, 70.0)]
+    }
+    assert len(icons) == len(levels), "段階ごとに別の形であること"
+    assert "none" not in icons
+
+
+def test_熱中症リスクは言葉でも読める():
+    """アイコンだけでは意味が伝わらないので、吹き出しと読み上げに文字を残す。"""
+    s = Sensor("x", "x", "x", temperature=35.0, humidity=70.0)
+    assert "危険" in s.heat_text
+    assert "目安" in s.heat_text, "測定値ではなく推定であることを断る"
+
+
+def test_熱中症の判定がsensors_jsと一致している():
+    """自動更新は sensors.js が同じ判定をやり直す。片方だけ直すと、
+    30 秒ごとの描き直しの前後でアイコンが変わってしまう。"""
+    from pathlib import Path
+
+    js = (Path(__file__).resolve().parent.parent / "app/static/sensors.js").read_text(
+        encoding="utf-8"
+    )
+
+    # 係数（Sensor.wbgt と同じ式であること）
+    for coefficient in ["0.735", "0.0374", "0.00292", "4.064"]:
+        assert coefficient in js, f"WBGT の係数 {coefficient} が JS 側に無い"
+
+    # 段階の区切り
+    for boundary, level in [("21", "safe"), ("25", "caution"), ("28", "warn"), ("31", "severe")]:
+        assert f"< {boundary}) return \"{level}\"" in js, f"{level} の区切りが JS 側と違う"
+
+
 @pytest.mark.parametrize(
     "temperature, expected",
     [

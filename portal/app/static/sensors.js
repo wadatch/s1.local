@@ -70,6 +70,62 @@ const DISCOMFORT_TEXT = {
   unknown: "—",
 };
 
+/** 暑さ指数 WBGT の推定値。sensors.py の Sensor.wbgt と同じ式。 */
+function wbgt(t, h) {
+  if (t === null || t === undefined || h === null || h === undefined) return null;
+  return 0.735 * t + 0.0374 * h + 0.00292 * t * h - 4.064;
+}
+
+function heatLevel(value) {
+  if (value === null) return "unknown";
+  if (value < 21) return "safe";
+  if (value < 25) return "caution";
+  if (value < 28) return "warn";
+  if (value < 31) return "severe";
+  return "danger";
+}
+
+const HEAT_ICON = {
+  safe: "shield-check",
+  caution: "shield-alert",
+  warn: "triangle-alert",
+  severe: "octagon-alert",
+  danger: "siren",
+  unknown: "none",
+};
+
+const HEAT_LABEL = {
+  safe: "ほぼ安全",
+  caution: "注意",
+  warn: "警戒",
+  severe: "厳重警戒",
+  danger: "危険",
+  unknown: "—",
+};
+
+function heatText(value) {
+  const label = HEAT_LABEL[heatLevel(value)];
+  if (value === null) return `熱中症リスク ${label}`;
+  return `熱中症リスク ${label}（暑さ指数の目安 ${Math.round(value)}）`;
+}
+
+/** 熱中症のセルはアイコンなので、文字ではなく形と色を差し替える。 */
+function setHeat(row, temperature, humidity) {
+  const cell = row.querySelector(".cell-heat");
+  if (!cell) return;
+  const value = wbgt(temperature, humidity);
+  const text = heatText(value);
+
+  cell.className = `num cell-heat heat-${heatLevel(value)}`;
+  cell.title = text;
+
+  const icon = cell.querySelector(".heat-icon");
+  if (icon) icon.dataset.heat = HEAT_ICON[heatLevel(value)];
+
+  const hidden = cell.querySelector(".visually-hidden");
+  if (hidden) hidden.textContent = text;
+}
+
 function batteryLevel(battery) {
   if (battery === null || battery === undefined) return "none";
   if (battery <= 10) return "crit";
@@ -209,6 +265,7 @@ async function refresh(manual) {
       di.title = DISCOMFORT_TEXT[level];
     }
 
+    setHeat(row, sensor.temperature, sensor.humidity);
     setBattery(row, sensor.battery);
     setCell(row, "cell-age",
       `${formatDuration(sensor.age_seconds)}前`,
